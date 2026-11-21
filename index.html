@@ -1,0 +1,1771 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>AI 패션 MD - 의류 상품 설명 자동 생성기</title>
+
+  <!-- iOS 홈 화면(독립 실행) 앱 설정 -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AI 패션 MD" />
+  <meta name="application-name" content="AI 패션 MD" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="color-scheme" content="light" />
+  <meta name="format-detection" content="telephone=no" />
+
+  <!-- PWA 매니페스트 & 아이콘 -->
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts & Pretendard -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Pretendard', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* 숫자 입력 화살표 제거 */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+    /* 커스텀 스크롤바 */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* 부드러운 페이드인 애니메이션 */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .animate-fade-in-up {
+      animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* ── iOS PWA: 안전 영역(Safe Area) 및 기본 처리 ─────────── */
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      background-color: #f8fafc;
+    }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      /* clip: sticky 헤더를 해치지 않으면서 가로 스크롤만 막는다 */
+      overflow-x: clip;
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      word-break: keep-all;
+      overflow-wrap: break-word;
+      -webkit-overflow-scrolling: touch;
+    }
+    html {
+      overflow-x: clip;
+    }
+    /* iOS에서 display:none 입력보다 확실하게 동작하는 숨김 방식 */
+    .file-input-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+      opacity: 0;
+    }
+    /* 상태 표시줄/홈 인디케이터가 겹치지 않도록 */
+    header.app-header {
+      padding-top: env(safe-area-inset-top);
+    }
+    .safe-bottom {
+      padding-bottom: calc(env(safe-area-inset-bottom) + 1.25rem);
+    }
+    #toastContainer {
+      bottom: calc(env(safe-area-inset-bottom) + 1.25rem);
+    }
+    /* 어떤 요소도 화면 폭을 넘지 않게 */
+    img, canvas, video, svg {
+      max-width: 100%;
+    }
+
+    /* ── 터치 조작성 ──────────────────────────────────────── */
+    button, a, label, [role="button"] {
+      touch-action: manipulation;
+    }
+    @media (max-width: 640px) {
+      /* iOS Safari: 16px 미만 입력 요소는 포커스 시 화면이 확대되므로 16px 고정 */
+      input, textarea, select {
+        font-size: 16px !important;
+      }
+      /* 작은 아이콘 버튼의 터치 영역 확보 */
+      .icon-tap {
+        min-width: 40px;
+        min-height: 40px;
+      }
+      #resHashtags button,
+      #priceCopyOptionsBar label {
+        min-height: 34px;
+      }
+      #previewGrid button {
+        min-width: 30px;
+        min-height: 30px;
+      }
+    }
+
+    /* ── 모달 ─────────────────────────────────────────────── */
+    .modal-backdrop {
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+    }
+    .modal-panel {
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1.5rem);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-900">
+
+  <!-- 상단 네비게이션 헤더 -->
+  <header class="app-header sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80">
+    <div class="max-w-5xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-9 h-9 shrink-0 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+          <i data-lucide="sparkles" class="w-5 h-5 text-amber-300"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-base sm:text-lg font-bold tracking-tight text-slate-900 leading-none">AI 패션 MD</h1>
+          <p class="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">사진 한 장으로 끝내는 의류 상품 설명서</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0">
+        <!-- 제미나이 API 키 설정 -->
+        <button id="apiKeyBtn" type="button" aria-haspopup="dialog" title="제미나이 API 키 설정" class="flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-colors">
+          <span id="apiKeyDot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <i data-lucide="key-round" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span id="apiKeyBtnText">키 설정</span>
+        </button>
+        <button id="resetAllBtn" type="button" aria-label="모든 입력과 결과 초기화" class="hidden items-center justify-center gap-1.5 px-2.5 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200/70 rounded-lg transition-colors">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">초기화</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 컨테이너 -->
+  <main class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 pt-6 pb-6 sm:py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+
+      <!-- 좌측(모바일 상단): 입력 및 설정 패널 -->
+      <section class="lg:col-span-5 space-y-5">
+        
+        <!-- 1. 사진 업로드 카드 -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">1</span>
+              <h2 class="text-sm font-bold text-slate-900">의류 사진 업로드</h2>
+            </div>
+            <span id="imageCountBadge" class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">0 / 5장</span>
+          </div>
+
+          <p class="text-xs text-slate-500 mb-3 leading-relaxed">
+            전체 샷, 원단 디테일, 케어라벨 사진을 함께 올리면 혼용률과 사이즈까지 훨씬 정확하게 분석합니다.
+          </p>
+
+          <!-- 드래그 앤 드롭 & 파일 선택 영역 -->
+          <div id="dropZone" class="relative border-2 border-dashed border-slate-300 hover:border-slate-900 bg-slate-50/60 hover:bg-slate-50 rounded-xl p-5 text-center transition-all cursor-pointer group">
+            <input id="fileInput" type="file" accept="image/*" multiple class="file-input-hidden" tabindex="-1" aria-hidden="true" />
+            <input id="cameraInput" type="file" accept="image/*" capture="environment" class="file-input-hidden" tabindex="-1" aria-hidden="true" />
+            
+            <div class="w-11 h-11 rounded-full bg-white border border-slate-200 shadow-xs flex items-center justify-center mx-auto mb-2.5 group-hover:scale-105 transition-transform">
+              <i data-lucide="image-plus" class="w-5 h-5 text-slate-700"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-800">사진을 드래그하거나 터치해 선택</p>
+            <p class="text-xs text-slate-400 mt-1">JPG, PNG, WEBP 지원 (최대 5장)</p>
+
+            <!-- 모바일/데스크톱 빠른 버튼 -->
+            <div class="mt-4 flex items-center justify-center gap-2">
+              <button type="button" id="selectGalleryBtn" class="px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 shadow-2xs flex items-center gap-1.5 transition-colors">
+                <i data-lucide="folder-open" class="w-3.5 h-3.5 text-slate-500"></i>
+                앨범에서 선택
+              </button>
+              <button type="button" id="takePhotoBtn" class="px-3.5 py-2 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 shadow-2xs flex items-center gap-1.5 transition-colors">
+                <i data-lucide="camera" class="w-3.5 h-3.5 text-slate-500"></i>
+                카메라 촬영
+              </button>
+            </div>
+          </div>
+
+          <!-- 업로드된 이미지 썸네일 그리드 -->
+          <div id="previewContainer" class="hidden mt-4">
+            <div id="previewGrid" class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-3 gap-2.5"></div>
+          </div>
+        </div>
+
+        <!-- 2. 판매 채널 톤앤매너 선택 -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">2</span>
+            <h2 class="text-sm font-bold text-slate-900">판매 채널 스타일 선택</h2>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5 p-1 bg-slate-100 rounded-xl" role="radiogroup" aria-label="판매 채널 톤앤매너">
+            <button type="button" data-tone="mall" class="tone-btn active flex flex-col items-start p-3 rounded-lg bg-white text-slate-900 shadow-xs border border-slate-200/60 transition-all text-left">
+              <div class="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                <span>🛍️</span>
+                <span>도소매 매장·쇼핑몰 톤</span>
+              </div>
+              <span class="text-[11px] text-slate-500 mt-1 leading-tight">감각적이고 전문적인 상세·상품 소개</span>
+            </button>
+
+            <button type="button" data-tone="resale" class="tone-btn flex flex-col items-start p-3 rounded-lg text-slate-600 hover:text-slate-900 transition-all text-left">
+              <div class="flex items-center gap-1.5 font-bold text-xs sm:text-sm">
+                <span>🥕</span>
+                <span>중고·개인거래 톤</span>
+              </div>
+              <span class="text-[11px] text-slate-500 mt-1 leading-tight">친근하고 솔직한 상태·실측 중심 안내</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 3. 중국 수입 원가 · 도/소매가 자동 계산기 (신규 핵심 기능) -->
+        <div class="bg-white rounded-2xl border-2 border-slate-900/90 shadow-sm p-5 relative overflow-hidden">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">3</span>
+              <h2 class="text-sm font-bold text-slate-900">중국 원가 · 도/소매가 계산기</h2>
+            </div>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">×240 · 100원 반올림</span>
+          </div>
+
+          <!-- 위안화(CNY) 입력 박스 -->
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <span class="text-base sm:text-lg font-extrabold text-slate-400">¥</span>
+            </div>
+            <input 
+              id="cnyInput" 
+              type="number" 
+              inputmode="decimal" 
+              step="0.1" 
+              min="0"
+              placeholder="중국 원가 입력 (예: 85)" 
+              class="w-full pl-9 pr-20 py-3 rounded-xl border border-slate-300 bg-slate-50/70 focus:bg-white text-base sm:text-lg font-bold text-slate-900 placeholder:text-sm placeholder:font-normal placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all"
+            />
+            <div class="absolute inset-y-0 right-0 pr-2.5 flex items-center gap-1">
+              <span class="text-xs font-semibold text-slate-400 mr-1">CNY</span>
+              <button type="button" id="clearCnyBtn" title="금액 지우기" class="hidden w-7 h-7 rounded-lg bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center transition-colors">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- 빠른 금액 추가 칩 -->
+          <div class="flex items-center gap-1.5 mt-2 overflow-x-auto pb-0.5">
+            <span class="text-[11px] text-slate-400 shrink-0">빠른 더하기:</span>
+            <button type="button" data-add-cny="10" class="cny-quick-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">+10¥</button>
+            <button type="button" data-add-cny="50" class="cny-quick-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">+50¥</button>
+            <button type="button" data-add-cny="100" class="cny-quick-btn shrink-0 text-[11px] font-semibold px-2 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">+100¥</button>
+          </div>
+
+          <!-- 실시간 계산 결과 3열 카드 -->
+          <div class="grid grid-cols-3 gap-2 mt-3.5 pt-3.5 border-t border-slate-100">
+            <!-- 한국 원가 -->
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-semibold text-slate-500">한국 원가</span>
+              </div>
+              <div class="mt-1.5">
+                <span id="calcKrwCost" class="text-xs sm:text-sm font-extrabold text-slate-800 tracking-tight">-</span>
+              </div>
+              <span class="text-[10px] text-slate-400 mt-0.5">위안 × 240</span>
+            </div>
+
+            <!-- 도매가 -->
+            <div class="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200/70 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-indigo-700">도매가</span>
+                <button type="button" onclick="copyPriceValue('wholesale')" title="도매가 복사" class="icon-tap flex items-center justify-center rounded-md text-indigo-400 hover:text-indigo-700">
+                  <i data-lucide="copy" class="w-3 h-3"></i>
+                </button>
+              </div>
+              <div class="mt-1.5">
+                <span id="calcWholesalePrice" class="text-xs sm:text-sm font-extrabold text-indigo-900 tracking-tight">-</span>
+              </div>
+              <span class="text-[10px] text-indigo-500 mt-0.5">+10,000 반올림</span>
+            </div>
+
+            <!-- 소매가 -->
+            <div class="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200/80 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-emerald-700">소매가</span>
+                <button type="button" onclick="copyPriceValue('retail')" title="소매가 복사" class="icon-tap flex items-center justify-center rounded-md text-emerald-500 hover:text-emerald-800">
+                  <i data-lucide="copy" class="w-3 h-3"></i>
+                </button>
+              </div>
+              <div class="mt-1.5">
+                <span id="calcRetailPrice" class="text-xs sm:text-sm font-extrabold text-emerald-900 tracking-tight">-</span>
+              </div>
+              <span class="text-[10px] text-emerald-600 mt-0.5">+20,000 반올림</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 추가 정보 메모 (선택 사항) -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center">4</span>
+              <h2 class="text-sm font-bold text-slate-900">추가 메모 <span class="text-xs font-normal text-slate-400">(선택)</span></h2>
+            </div>
+          </div>
+          <textarea id="extraMemo" rows="2" placeholder="예: 컬러 3종(아이보리/블랙/소라), 총장 64cm / 가슴단면 52cm, 당일 출고 가능" class="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all resize-none"></textarea>
+          
+          <!-- 빠른 키워드 칩 -->
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <button type="button" class="memo-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">+ 거래처 인기상품</button>
+            <button type="button" class="memo-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">+ 매장 당일출고</button>
+            <button type="button" class="memo-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">+ 고퀄리티 수입원단</button>
+            <button type="button" class="memo-chip text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors">+ 컬러 다수 보유</button>
+          </div>
+        </div>
+
+        <!-- 생성 실행 버튼 -->
+        <button id="generateBtn" type="button" class="w-full py-3.5 px-5 rounded-2xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-sm sm:text-base shadow-md shadow-slate-900/10 flex items-center justify-center gap-2 transition-all">
+          <i data-lucide="wand-2" class="w-5 h-5 text-amber-300"></i>
+          <span>AI 상품 설명 자동 생성하기</span>
+        </button>
+
+      </section>
+
+      <!-- 우측(모바일 하단): AI 분석 결과 대시보드 -->
+      <section class="lg:col-span-7">
+        
+        <!-- 초기 빈 상태 (Empty State) -->
+        <div id="emptyState" class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 sm:p-12 text-center flex flex-col items-center justify-center min-h-[420px]">
+          <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+            <i data-lucide="shirt" class="w-8 h-8 text-slate-400"></i>
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-slate-800">분석할 의류 사진을 올려주세요</h3>
+          <p class="text-xs sm:text-sm text-slate-500 max-w-sm mt-2 leading-relaxed">
+            사진을 업로드하고 생성 버튼을 누르면 10년 차 패션 MD AI가 소재, 핏, 코디 팁, 추천 사이즈와 완성형 판매글을 자동으로 작성해 드립니다.
+          </p>
+          <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2 w-full max-w-md text-left">
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+              <span class="text-xs font-bold text-slate-700 block">🧵 소재·질감</span>
+              <span class="text-[11px] text-slate-400">원단·두께·신축성</span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+              <span class="text-xs font-bold text-slate-700 block">📐 핏·디테일</span>
+              <span class="text-[11px] text-slate-400">실루엣·마감 분석</span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+              <span class="text-xs font-bold text-slate-700 block">👗 코디 제안</span>
+              <span class="text-[11px] text-slate-400">매치 아이템 추천</span>
+            </div>
+            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+              <span class="text-xs font-bold text-slate-700 block">📏 사이즈 안내</span>
+              <span class="text-[11px] text-slate-400">추천 체형·보완점</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 로딩 상태 (Loading State) -->
+        <div id="loadingState" class="hidden bg-white rounded-2xl border border-slate-200/80 shadow-sm p-8 sm:p-12 text-center flex flex-col items-center justify-center min-h-[420px]">
+          <div class="relative w-16 h-16 mb-5">
+            <div class="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+            <div class="absolute inset-0 rounded-full border-4 border-slate-900 border-t-transparent animate-spin"></div>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <i data-lucide="sparkles" class="w-6 h-6 text-amber-500 animate-pulse"></i>
+            </div>
+          </div>
+          <h3 class="text-base sm:text-lg font-bold text-slate-900">패션 MD가 의류 디테일을 분석 중입니다...</h3>
+          <p id="loadingStepText" class="text-xs sm:text-sm text-slate-500 mt-2">원단 조직과 실루엣, 케어라벨 정보를 확인하고 있어요.</p>
+        </div>
+
+        <!-- 결과 대시보드 (Result Dashboard) -->
+        <div id="resultDashboard" class="hidden space-y-5 animate-fade-in-up">
+
+          <!-- 노션용 한 번에 복사 바 (상품 데이터 전체를 마크다운 한 덩어리로) -->
+          <div class="bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-900 rounded-2xl shadow-md shadow-slate-900/20 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-start gap-3 min-w-0">
+              <div class="w-10 h-10 shrink-0 rounded-xl bg-white/10 text-white flex items-center justify-center">
+                <i data-lucide="clipboard-list" class="w-5 h-5 text-amber-300"></i>
+              </div>
+              <div class="min-w-0">
+                <h3 class="text-sm font-bold text-white leading-tight">노션에 그대로 붙여넣기</h3>
+                <p class="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed">상품명·카테고리·컬러·소재·핏·사이즈·가격·상세설명·해시태그를 마크다운 한 덩어리로 복사합니다.</p>
+              </div>
+            </div>
+            <button type="button" id="copyNotionBtn" class="w-full sm:w-auto sm:min-w-[184px] shrink-0 px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 active:scale-[0.99] text-slate-900 text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
+              <i data-lucide="clipboard-check" class="w-4 h-4 text-indigo-600"></i>
+              <span id="copyNotionBtnText">노션용 한 번에 복사</span>
+            </button>
+          </div>
+
+          <!-- 결과 상단: 수입 원가 및 도·소매가 요약 카드 (위안화 입력 시 자동 표시) -->
+          <div id="resPriceSummaryCard" class="hidden bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                  <i data-lucide="calculator" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900">수입 원가 및 도·소매 판매가</h3>
+                  <p class="text-[11px] text-slate-500">기준 원가: <span id="resCnyDisplay" class="font-bold text-slate-700">¥0</span> (×240 적용, 100원 단위 반올림)</p>
+                </div>
+              </div>
+              <button type="button" id="copyPriceSummaryBtn" class="icon-tap px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1 transition-colors">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>가격표 복사</span>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2.5">
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
+                <span class="text-[11px] font-semibold text-slate-500 block">한국 원가</span>
+                <span id="resCardKrwCost" class="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 block">0원</span>
+              </div>
+              <div class="p-3 rounded-xl bg-indigo-50/80 border border-indigo-200/80 flex items-center justify-between">
+                <div>
+                  <span class="text-[11px] font-bold text-indigo-700 block">도매가</span>
+                  <span id="resCardWholesale" class="text-sm sm:text-base font-extrabold text-indigo-950 mt-0.5 block">0원</span>
+                </div>
+                <button type="button" onclick="copyPriceValue('wholesale')" class="icon-tap flex items-center justify-center rounded-lg bg-white/80 hover:bg-white text-indigo-600 border border-indigo-200/60 shadow-2xs" title="도매가 복사">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+              <div class="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200/90 flex items-center justify-between">
+                <div>
+                  <span class="text-[11px] font-bold text-emerald-700 block">소매가</span>
+                  <span id="resCardRetail" class="text-sm sm:text-base font-extrabold text-emerald-950 mt-0.5 block">0원</span>
+                </div>
+                <button type="button" onclick="copyPriceValue('retail')" class="icon-tap flex items-center justify-center rounded-lg bg-white/80 hover:bg-white text-emerald-600 border border-emerald-200/60 shadow-2xs" title="소매가 복사">
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 상단 요약 카드: 카테고리, 컬러, 상품명 -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span id="resCategory" class="px-2.5 py-1 rounded-lg bg-slate-900 text-white text-xs font-semibold">상의 > 니트</span>
+                <span id="resColor" class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200/70 text-xs font-medium">오트밀 베이지</span>
+              </div>
+              <span id="resToneBadge" class="text-[11px] font-medium text-slate-400">🛍️ 도소매 매장·쇼핑몰 톤</span>
+            </div>
+
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">추천 상품명 (제목)</label>
+            <div class="flex items-start sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/70">
+              <h2 id="resTitle" class="text-base sm:text-lg font-bold text-slate-900 leading-snug">상품명이 여기에 표시됩니다</h2>
+              <button type="button" id="copyTitleBtn" class="shrink-0 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-2xs transition-colors">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>복사</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 완성형 상세 본문 에디터 & 원클릭 복사 카드 -->
+          <div class="bg-white rounded-2xl border-2 border-slate-900 shadow-sm p-5 sm:p-6">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+                  <i data-lucide="file-text" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900">완성형 상품 설명 본문</h3>
+                  <p class="text-[11px] text-slate-500">거래처·고객 유형에 맞춰 가격 포함 여부를 선택해 복사하세요</p>
+                </div>
+              </div>
+              <button type="button" id="copyFullDescBtn" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all">
+                <i data-lucide="clipboard-check" class="w-4 h-4 text-amber-300"></i>
+                <span>전체 본문 복사</span>
+              </button>
+            </div>
+
+            <!-- 가격 포함 복사 옵션 바 (위안화 입력 시 활성화) -->
+            <div id="priceCopyOptionsBar" class="hidden flex-wrap items-center gap-2 mb-3 p-2.5 rounded-xl bg-slate-100/90 border border-slate-200/70">
+              <span class="text-[11px] font-bold text-slate-600 mr-1">복사 시 가격 표기:</span>
+              <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 cursor-pointer select-none text-xs font-semibold text-indigo-800">
+                <input type="checkbox" id="includeWholesaleChk" class="rounded text-indigo-600 focus:ring-indigo-500" />
+                <span>도매가 포함</span>
+              </label>
+              <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 cursor-pointer select-none text-xs font-semibold text-emerald-800">
+                <input type="checkbox" id="includeRetailChk" class="rounded text-emerald-600 focus:ring-emerald-500" />
+                <span>소매가 포함</span>
+              </label>
+            </div>
+
+            <textarea id="resFullDescription" rows="11" class="w-full rounded-xl border border-slate-200 bg-slate-50/70 p-4 text-xs sm:text-sm text-slate-800 leading-relaxed focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all"></textarea>
+          </div>
+
+          <!-- 항목별 상세 분석 2열 그리드 -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            
+            <!-- 소재 및 원단 분석 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <i data-lucide="layers" class="w-4 h-4"></i>
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">소재 및 원단 분석</h3>
+              </div>
+              <p id="resFabricSummary" class="text-xs sm:text-sm text-slate-700 leading-relaxed mb-3"></p>
+              <div class="grid grid-cols-3 gap-1.5 text-center mb-3">
+                <div class="bg-slate-50 rounded-lg p-2 border border-slate-100">
+                  <span class="text-[10px] text-slate-400 block">두께감</span>
+                  <span id="resThickness" class="text-xs font-bold text-slate-800">-</span>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-2 border border-slate-100">
+                  <span class="text-[10px] text-slate-400 block">신축성</span>
+                  <span id="resStretch" class="text-xs font-bold text-slate-800">-</span>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-2 border border-slate-100">
+                  <span class="text-[10px] text-slate-400 block">안감</span>
+                  <span id="resLining" class="text-xs font-bold text-slate-800">-</span>
+                </div>
+              </div>
+              <div class="flex items-start gap-1.5 text-xs text-slate-500 bg-slate-50/80 p-2.5 rounded-lg">
+                <i data-lucide="droplets" class="w-3.5 h-3.5 text-sky-500 shrink-0 mt-0.5"></i>
+                <span id="resCareTip"></span>
+              </div>
+            </div>
+
+            <!-- 핏 & 디자인 디테일 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <i data-lucide="scissors" class="w-4 h-4"></i>
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">핏 & 디자인 디테일</h3>
+              </div>
+              <div class="inline-block px-2.5 py-1 rounded-md bg-emerald-50/80 text-emerald-800 text-xs font-bold mb-2.5" id="resFitType"></div>
+              <ul id="resDesignDetails" class="space-y-1.5 text-xs sm:text-sm text-slate-700"></ul>
+            </div>
+
+            <!-- 사이즈 & 체형 커버 안내 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <i data-lucide="ruler" class="w-4 h-4"></i>
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">사이즈 & 체형 안내</h3>
+              </div>
+              <div class="px-3 py-2 rounded-xl bg-amber-50/60 border border-amber-100 mb-2.5">
+                <span class="text-[10px] font-semibold text-amber-700 block">추천 착용 사이즈</span>
+                <span id="resRecommendedSize" class="text-xs sm:text-sm font-bold text-slate-900"></span>
+              </div>
+              <p id="resBodyCover" class="text-xs sm:text-sm text-slate-600 leading-relaxed"></p>
+            </div>
+
+            <!-- 스타일링 코디 팁 -->
+            <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+              <div class="flex items-center gap-2 mb-3">
+                <span class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <i data-lucide="sparkles" class="w-4 h-4"></i>
+                </span>
+                <h3 class="text-sm font-bold text-slate-900">MD 스타일링 코디 팁</h3>
+              </div>
+              <ul id="resStylingTips" class="space-y-2 text-xs sm:text-sm text-slate-700"></ul>
+            </div>
+
+          </div>
+
+          <!-- 상품 컨디션 & 해시태그 카드 -->
+          <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 space-y-4">
+            <div>
+              <div class="flex items-center gap-1.5 mb-1.5">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-slate-700"></i>
+                <h3 class="text-xs font-bold text-slate-900">상품 컨디션 및 상태 요약</h3>
+              </div>
+              <p id="resCondition" class="text-xs sm:text-sm text-slate-600 bg-slate-50 px-3.5 py-2.5 rounded-xl border border-slate-100"></p>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-bold text-slate-900">추천 검색 해시태그</span>
+                <button type="button" id="copyTagsBtn" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
+                  <i data-lucide="hash" class="w-3.5 h-3.5"></i>
+                  <span>태그 전체 복사</span>
+                </button>
+              </div>
+              <div id="resHashtags" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- API 키 설정 모달 -->
+  <div id="apiKeyModal" class="hidden fixed inset-0 z-50 items-end sm:items-center justify-center bg-slate-900/50 modal-backdrop p-0 sm:p-4">
+    <div class="modal-panel w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 safe-bottom" role="dialog" aria-modal="true" aria-labelledby="apiKeyModalTitle">
+      <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-4 sm:hidden"></div>
+      <div class="flex items-start gap-3">
+        <div class="w-9 h-9 shrink-0 rounded-xl bg-slate-900 text-amber-300 flex items-center justify-center">
+          <i data-lucide="key-round" class="w-4 h-4"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 id="apiKeyModalTitle" class="text-base font-bold text-slate-900">제미나이 API 키</h3>
+          <p id="apiKeyModalStatus" class="text-[11px] text-slate-500 mt-0.5">아직 저장된 키가 없습니다.</p>
+        </div>
+        <button type="button" id="apiKeyModalCloseBtn" aria-label="닫기" class="icon-tap -mt-1 -mr-1 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-500 leading-relaxed mt-3">
+        키를 한 번만 저장하면 앱을 닫았다 다시 열어도 계속 쓸 수 있어요. 키는 이 아이폰의 브라우저 저장소에만 보관되며, 제미나이 호출 외에는 어디에도 보내지 않습니다.
+      </p>
+
+      <label for="apiKeyInput" class="block text-[11px] font-semibold text-slate-600 mt-4 mb-1">API 키</label>
+      <div class="relative">
+        <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AIza..." class="w-full pl-3 pr-14 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all" />
+        <button type="button" id="apiKeyToggleBtn" class="absolute inset-y-0 right-0 px-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800">보기</button>
+      </div>
+
+      <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 mt-2.5">
+        Google AI Studio에서 무료로 발급받기
+        <i data-lucide="external-link" class="w-3 h-3"></i>
+      </a>
+
+      <div class="flex items-center gap-2 mt-5">
+        <button type="button" id="apiKeySaveBtn" class="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white text-sm font-bold transition-all">저장하기</button>
+        <button type="button" id="apiKeyDeleteBtn" class="hidden px-3.5 py-3 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold border border-rose-200 transition-colors">삭제</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 클립보드 자동 복사가 막힌 경우 직접 복사 모달 -->
+  <div id="manualCopyModal" class="hidden fixed inset-0 z-50 items-end sm:items-center justify-center bg-slate-900/50 modal-backdrop p-0 sm:p-4">
+    <div class="modal-panel w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 safe-bottom" role="dialog" aria-modal="true" aria-labelledby="manualCopyTitle">
+      <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-4 sm:hidden"></div>
+      <h3 id="manualCopyTitle" class="text-base font-bold text-slate-900">직접 복사해 주세요</h3>
+      <p class="text-xs text-slate-500 leading-relaxed mt-1.5">아이폰이 자동 복사를 막았습니다. 아래 글자를 길게 눌러 <b>전체 선택 → 복사</b> 해 주세요.</p>
+      <textarea id="manualCopyText" readonly rows="8" class="w-full mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-800 leading-relaxed resize-none"></textarea>
+      <button type="button" id="manualCopyCloseBtn" class="w-full mt-3 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold">닫기</button>
+    </div>
+  </div>
+
+  <!-- 토스트 알림 메시지 박스 (alert 대체) -->
+  <div id="toastContainer" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center gap-2 w-full max-w-sm px-4"></div>
+
+  <script>
+    // 아이콘 초기화 (CDN 로드 실패 시에도 앱이 멈추지 않도록 방어)
+    if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+
+    // 전역 상태 관리
+    const state = {
+      images: [], // { id, file, base64, mimeType, previewUrl }
+      tone: 'mall', // 기본값을 '도소매 매장·쇼핑몰 톤'으로 설정
+      isGenerating: false,
+      lastResult: null,
+      pricing: {
+        cny: null,
+        krwCost: 0,
+        wholesalePrice: 0,
+        retailPrice: 0
+      }
+    };
+
+    const MAX_IMAGES = 5;
+
+    // DOM 요소 참조
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const cameraInput = document.getElementById('cameraInput');
+    const selectGalleryBtn = document.getElementById('selectGalleryBtn');
+    const takePhotoBtn = document.getElementById('takePhotoBtn');
+    const previewContainer = document.getElementById('previewContainer');
+    const previewGrid = document.getElementById('previewGrid');
+    const imageCountBadge = document.getElementById('imageCountBadge');
+    const toneBtns = document.querySelectorAll('.tone-btn');
+    const extraMemo = document.getElementById('extraMemo');
+    const memoChips = document.querySelectorAll('.memo-chip');
+    const generateBtn = document.getElementById('generateBtn');
+    const resetAllBtn = document.getElementById('resetAllBtn');
+
+    // 가격 계산기 DOM 요소
+    const cnyInput = document.getElementById('cnyInput');
+    const clearCnyBtn = document.getElementById('clearCnyBtn');
+    const cnyQuickBtns = document.querySelectorAll('.cny-quick-btn');
+    const calcKrwCost = document.getElementById('calcKrwCost');
+    const calcWholesalePrice = document.getElementById('calcWholesalePrice');
+    const calcRetailPrice = document.getElementById('calcRetailPrice');
+
+    // 결과 영역 DOM 요소
+    const emptyState = document.getElementById('emptyState');
+    const loadingState = document.getElementById('loadingState');
+    const loadingStepText = document.getElementById('loadingStepText');
+    const resultDashboard = document.getElementById('resultDashboard');
+    const resPriceSummaryCard = document.getElementById('resPriceSummaryCard');
+    const priceCopyOptionsBar = document.getElementById('priceCopyOptionsBar');
+    const includeWholesaleChk = document.getElementById('includeWholesaleChk');
+    const includeRetailChk = document.getElementById('includeRetailChk');
+
+    // 노션용 한 번에 복사 버튼 요소
+    const copyNotionBtn = document.getElementById('copyNotionBtn');
+    const copyNotionBtnText = document.getElementById('copyNotionBtnText');
+
+    // 원화 포맷 유틸리티
+    function formatKRW(amount) {
+      return `${amount.toLocaleString('ko-KR')}원`;
+    }
+
+    // 중국 원가(CNY) 기준 한국 원가·도매가·소매가 실시간 계산 함수
+    // 공식:
+    // - 한국 원가 = 중국 위안화 * 240
+    // - 도매가 = (한국 원가 + 10,000)의 100원 단위 반올림
+    // - 소매가 = (한국 원가 + 20,000)의 100원 단위 반올림
+    function updatePricingCalculation() {
+      const rawVal = parseFloat(cnyInput.value);
+
+      if (isNaN(rawVal) || rawVal <= 0) {
+        state.pricing = { cny: null, krwCost: 0, wholesalePrice: 0, retailPrice: 0 };
+        calcKrwCost.textContent = '-';
+        calcWholesalePrice.textContent = '-';
+        calcRetailPrice.textContent = '-';
+        clearCnyBtn.classList.add('hidden');
+        resPriceSummaryCard.classList.add('hidden');
+        priceCopyOptionsBar.classList.add('hidden');
+        priceCopyOptionsBar.classList.remove('flex');
+        return;
+      }
+
+      const krwCost = Math.round(rawVal * 240);
+      const wholesalePrice = Math.round((krwCost + 10000) / 100) * 100;
+      const retailPrice = Math.round((krwCost + 20000) / 100) * 100;
+
+      state.pricing = {
+        cny: rawVal,
+        krwCost,
+        wholesalePrice,
+        retailPrice
+      };
+
+      // 좌측 계산기 카드 업데이트
+      calcKrwCost.textContent = formatKRW(krwCost);
+      calcWholesalePrice.textContent = formatKRW(wholesalePrice);
+      calcRetailPrice.textContent = formatKRW(retailPrice);
+      clearCnyBtn.classList.remove('hidden');
+
+      // 우측 결과 화면 내 가격 요약 카드 및 복사 옵션 동기화
+      document.getElementById('resCnyDisplay').textContent = `¥${rawVal.toLocaleString('ko-KR')}`;
+      document.getElementById('resCardKrwCost').textContent = formatKRW(krwCost);
+      document.getElementById('resCardWholesale').textContent = formatKRW(wholesalePrice);
+      document.getElementById('resCardRetail').textContent = formatKRW(retailPrice);
+
+      resPriceSummaryCard.classList.remove('hidden');
+      priceCopyOptionsBar.classList.remove('hidden');
+      priceCopyOptionsBar.classList.add('flex');
+    }
+
+    // 개별 가격 원클릭 복사
+    window.copyPriceValue = function(type) {
+      if (!state.pricing.cny) {
+        showToast('먼저 중국 원가(위안화)를 입력해 주세요.', 'error');
+        return;
+      }
+      if (type === 'wholesale') {
+        copyToClipboard(formatKRW(state.pricing.wholesalePrice), `도매가(${formatKRW(state.pricing.wholesalePrice)})가 복사되었습니다!`);
+      } else if (type === 'retail') {
+        copyToClipboard(formatKRW(state.pricing.retailPrice), `소매가(${formatKRW(state.pricing.retailPrice)})가 복사되었습니다!`);
+      }
+    };
+
+    // 계산기 입력 이벤트 바인딩
+    cnyInput.addEventListener('input', updatePricingCalculation);
+
+    clearCnyBtn.addEventListener('click', () => {
+      cnyInput.value = '';
+      updatePricingCalculation();
+      cnyInput.focus();
+    });
+
+    cnyQuickBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const addVal = parseFloat(btn.dataset.addCny) || 0;
+        const currentVal = parseFloat(cnyInput.value) || 0;
+        const nextVal = Math.round((currentVal + addVal) * 100) / 100;
+        cnyInput.value = nextVal;
+        updatePricingCalculation();
+      });
+    });
+
+    // 가격표 요약 복사 버튼
+    document.getElementById('copyPriceSummaryBtn').addEventListener('click', () => {
+      if (!state.pricing.cny) return;
+      const summaryText = `[가격 안내]\n• 도매가: ${formatKRW(state.pricing.wholesalePrice)}\n• 소매가: ${formatKRW(state.pricing.retailPrice)}`;
+      copyToClipboard(summaryText, '도·소매 가격표가 복사되었습니다!');
+    });
+
+    // 커스텀 토스트 메시지 함수 (alert() 절대 미사용)
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      
+      const bgClass = type === 'error' 
+        ? 'bg-rose-600 text-white' 
+        : type === 'success' 
+          ? 'bg-slate-900 text-white' 
+          : 'bg-slate-800 text-white';
+
+      toast.className = `${bgClass} px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-medium flex items-center gap-2 transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto`;
+      toast.innerHTML = `<span>${message}</span>`;
+      
+      container.appendChild(toast);
+      requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-2');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    // 클립보드 복사: iOS Safari / iframe 대응 3단계
+    // 1) navigator.clipboard  →  2) textarea + execCommand  →  3) 직접 복사 모달
+    async function copyWithClipboardFallback(text, successMsg = '클립보드에 복사되었습니다!') {
+      if (!text) return false;
+      let copied = false;
+
+      // 1) Clipboard API (https + 사용자 제스처에서만 동작)
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (err) {
+          copied = false;
+        }
+      }
+
+      // 2) 폴백: 화면 밖 textarea + document.execCommand('copy')
+      if (!copied) {
+        const previouslyFocused = document.activeElement;
+        const tempTextarea = document.createElement('textarea');
+        tempTextarea.value = text;
+        tempTextarea.setAttribute('readonly', '');
+        tempTextarea.style.position = 'fixed';
+        tempTextarea.style.top = '0';
+        tempTextarea.style.left = '-9999px';
+        tempTextarea.style.opacity = '0';
+        document.body.appendChild(tempTextarea);
+
+        try {
+          tempTextarea.focus();
+          tempTextarea.select();
+          tempTextarea.setSelectionRange(0, tempTextarea.value.length);
+          copied = document.execCommand('copy');
+        } catch (err) {
+          copied = false;
+        }
+
+        document.body.removeChild(tempTextarea);
+        if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+          try { previouslyFocused.focus(); } catch (err) {}
+        }
+      }
+
+      if (copied) {
+        showToast(successMsg, 'success');
+      } else {
+        // 3) 모두 막혔다면 직접 선택해 복사할 수 있게 창을 띄운다
+        openManualCopyModal(text);
+        showToast('자동 복사가 막혀 직접 복사 창을 열었습니다.', 'error');
+      }
+      return copied;
+    }
+
+    // 기존 호출부 호환용
+    function copyToClipboard(text, successMsg) {
+      return copyWithClipboardFallback(text, successMsg);
+    }
+
+    // 이미지 리사이징 및 Base64 변환 (API 전송 최적화)
+    function processImageFile(file) {
+      return new Promise((resolve, reject) => {
+        const isHeic = /heic|heif/i.test(file.type || '') || /\.(heic|heif)$/i.test(file.name || '');
+        if (!file.type.startsWith('image/')) {
+          reject(new Error('이미지 파일만 업로드할 수 있습니다.'));
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const MAX_DIMENSION = 1280; // 해상도 유지하면서 용량 최적화
+            let width = img.width;
+            let height = img.height;
+
+            if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+              if (width > height) {
+                height = Math.round((height * MAX_DIMENSION) / width);
+                width = MAX_DIMENSION;
+              } else {
+                width = Math.round((width * MAX_DIMENSION) / height);
+                height = MAX_DIMENSION;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const base64Data = dataUrl.split(',')[1];
+
+            resolve({
+              id: Date.now() + Math.random().toString(36).substring(2, 7),
+              base64: base64Data,
+              mimeType: 'image/jpeg',
+              previewUrl: dataUrl
+            });
+          };
+          img.onerror = () => reject(new Error(isHeic
+            ? '아이폰 HEIC 사진은 브라우저에서 열지 못했습니다. [설정 > 카메라 > 포맷 > 높은 호환성]으로 바꾸거나, 사진 앱에서 스크린샷으로 다시 시도해 주세요.'
+            : '이미지를 불러오는 중 오류가 발생했습니다. 다른 사진으로 다시 시도해 주세요.'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 이미지 추가 핸들러
+    async function handleFiles(fileList) {
+      const files = Array.from(fileList);
+      if (!files.length) return;
+
+      const remainingSlots = MAX_IMAGES - state.images.length;
+      if (remainingSlots <= 0) {
+        showToast(`사진은 최대 ${MAX_IMAGES}장까지만 업로드할 수 있습니다.`, 'error');
+        return;
+      }
+
+      const filesToProcess = files.slice(0, remainingSlots);
+      if (files.length > remainingSlots) {
+        showToast(`최대 ${MAX_IMAGES}장 제한으로 ${remainingSlots}장만 추가되었습니다.`);
+      }
+
+      try {
+        // 한 장이 실패해도 나머지 사진은 살린다
+        const results = await Promise.allSettled(filesToProcess.map(processImageFile));
+        const processed = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+        const failed = results.filter(r => r.status === 'rejected');
+
+        if (processed.length) {
+          state.images.push(...processed);
+          renderPreviews();
+        }
+        if (failed.length) {
+          showToast(failed[0].reason?.message || '일부 사진을 불러오지 못했습니다.', 'error');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    // 썸네일 미리보기 렌더링
+    function renderPreviews() {
+      imageCountBadge.textContent = `${state.images.length} / ${MAX_IMAGES}장`;
+
+      if (state.images.length === 0) {
+        previewContainer.classList.add('hidden');
+        previewGrid.innerHTML = '';
+        resetAllBtn.classList.add('hidden');
+        resetAllBtn.classList.remove('flex');
+        return;
+      }
+
+      previewContainer.classList.remove('hidden');
+      resetAllBtn.classList.remove('hidden');
+      resetAllBtn.classList.add('flex');
+
+      previewGrid.innerHTML = state.images.map((img, index) => `
+        <div class="relative group aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+          <img src="${img.previewUrl}" alt="업로드 이미지 ${index + 1}" class="w-full h-full object-cover" />
+          ${index === 0 ? '<span class="absolute bottom-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-900/80 text-white text-[10px] font-bold">대표</span>' : ''}
+          <button type="button" onclick="removeImage('${img.id}')" aria-label="사진 삭제" class="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-slate-900/75 hover:bg-rose-600 text-white flex items-center justify-center transition-colors shadow-xs">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      `).join('');
+
+      if (window.lucide && typeof lucide.createIcons === 'function') lucide.createIcons();
+    }
+
+    // 이미지 삭제
+    window.removeImage = function(id) {
+      state.images = state.images.filter(img => img.id !== id);
+      renderPreviews();
+    };
+
+    // 업로드 이벤트 바인딩
+    dropZone.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return;
+      fileInput.click();
+    });
+    selectGalleryBtn.addEventListener('click', () => fileInput.click());
+    takePhotoBtn.addEventListener('click', () => cameraInput.click());
+
+    fileInput.addEventListener('change', (e) => {
+      handleFiles(e.target.files);
+      e.target.value = '';
+    });
+    cameraInput.addEventListener('change', (e) => {
+      handleFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    // 드래그 앤 드롭 이벤트
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-slate-900', 'bg-slate-100/80');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-slate-900', 'bg-slate-100/80');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-slate-900', 'bg-slate-100/80');
+      if (e.dataTransfer?.files) {
+        handleFiles(e.dataTransfer.files);
+      }
+    });
+
+    // 톤앤매너 선택 토글
+    toneBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        toneBtns.forEach(b => {
+          b.classList.remove('active', 'bg-white', 'text-slate-900', 'shadow-xs', 'border', 'border-slate-200/60');
+          b.classList.add('text-slate-600');
+        });
+        btn.classList.add('active', 'bg-white', 'text-slate-900', 'shadow-xs', 'border', 'border-slate-200/60');
+        btn.classList.remove('text-slate-600');
+        state.tone = btn.dataset.tone;
+      });
+    });
+
+    // 메모 빠른 키워드 칩 추가
+    memoChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const textToAdd = chip.textContent.replace('+ ', '').trim();
+        const current = extraMemo.value.trim();
+        if (!current.includes(textToAdd)) {
+          extraMemo.value = current ? `${current}, ${textToAdd}` : textToAdd;
+        }
+        extraMemo.focus();
+      });
+    });
+
+    // 전체 초기화
+    resetAllBtn.addEventListener('click', () => {
+      state.images = [];
+      state.lastResult = null;
+      extraMemo.value = '';
+      cnyInput.value = '';
+      includeWholesaleChk.checked = false;
+      includeRetailChk.checked = false;
+      updatePricingCalculation();
+      renderPreviews();
+      resultDashboard.classList.add('hidden');
+      loadingState.classList.add('hidden');
+      emptyState.classList.remove('hidden');
+      showToast('모든 입력과 결과가 초기화되었습니다.');
+    });
+
+    // ─────────────────────────────────────────────
+    // 제미나이 API 키: 아이폰에만 저장 (localStorage)
+    // 키는 코드에 하드코딩하지 않고, 이 기기 브라우저에만 보관한다.
+    // ─────────────────────────────────────────────
+    const API_KEY_STORAGE_KEY = 'ai_fashion_md_gemini_api_key';
+
+    const apiKeyBtn = document.getElementById('apiKeyBtn');
+    const apiKeyBtnText = document.getElementById('apiKeyBtnText');
+    const apiKeyDot = document.getElementById('apiKeyDot');
+    const apiKeyModal = document.getElementById('apiKeyModal');
+    const apiKeyModalStatus = document.getElementById('apiKeyModalStatus');
+    const apiKeyInput = document.getElementById('apiKeyInput');
+    const apiKeyToggleBtn = document.getElementById('apiKeyToggleBtn');
+    const apiKeySaveBtn = document.getElementById('apiKeySaveBtn');
+    const apiKeyDeleteBtn = document.getElementById('apiKeyDeleteBtn');
+    const apiKeyModalCloseBtn = document.getElementById('apiKeyModalCloseBtn');
+    const manualCopyModal = document.getElementById('manualCopyModal');
+    const manualCopyText = document.getElementById('manualCopyText');
+    const manualCopyCloseBtn = document.getElementById('manualCopyCloseBtn');
+
+    // 저장된 키 읽기 (사파리 시크릿 모드 등 저장소가 막힌 경우에도 앱이 멈추지 않게)
+    function loadApiKey() {
+      try {
+        const stored = localStorage.getItem(API_KEY_STORAGE_KEY);
+        return stored ? stored.trim() : '';
+      } catch (err) {
+        return '';
+      }
+    }
+
+    function saveApiKey(key) {
+      try {
+        localStorage.setItem(API_KEY_STORAGE_KEY, key.trim());
+        return true;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function removeApiKey() {
+      try { localStorage.removeItem(API_KEY_STORAGE_KEY); } catch (err) {}
+    }
+
+    function maskApiKey(key) {
+      if (!key) return '';
+      if (key.length <= 8) return '••••';
+      return `${key.slice(0, 4)}••••${key.slice(-4)}`;
+    }
+
+    // 헤더 버튼(설정됨 / 미설정) 및 모달 상태 동기화
+    function updateApiKeyUI() {
+      const key = loadApiKey();
+      const saved = !!key;
+      apiKeyBtnText.textContent = saved ? '키 설정됨' : '키 설정';
+      apiKeyDot.className = `w-1.5 h-1.5 rounded-full ${saved ? 'bg-emerald-500' : 'bg-amber-400'}`;
+      apiKeyBtn.title = saved ? `제미나이 API 키 설정됨 (${maskApiKey(key)})` : '제미나이 API 키를 등록해 주세요';
+      apiKeyModalStatus.textContent = saved ? `저장된 키: ${maskApiKey(key)}` : '아직 저장된 키가 없습니다.';
+      apiKeyDeleteBtn.classList.toggle('hidden', !saved);
+      return saved;
+    }
+
+    function openApiKeyModal() {
+      const key = loadApiKey();
+      apiKeyInput.value = key;
+      apiKeyInput.type = 'password';
+      apiKeyToggleBtn.textContent = '보기';
+      updateApiKeyUI();
+      apiKeyModal.classList.remove('hidden');
+      apiKeyModal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => { if (!key) apiKeyInput.focus(); }, 150);
+    }
+
+    function closeApiKeyModal() {
+      apiKeyModal.classList.add('hidden');
+      apiKeyModal.classList.remove('flex');
+      document.body.style.overflow = '';
+      apiKeyInput.value = '';
+      apiKeyInput.type = 'password';
+      apiKeyToggleBtn.textContent = '보기';
+    }
+
+    // 자동 복사가 막혔을 때 직접 복사 창
+    function openManualCopyModal(text) {
+      manualCopyText.value = text;
+      manualCopyModal.classList.remove('hidden');
+      manualCopyModal.classList.add('flex');
+      document.body.style.overflow = 'hidden';
+      setTimeout(() => {
+        try {
+          manualCopyText.focus();
+          manualCopyText.setSelectionRange(0, manualCopyText.value.length);
+        } catch (err) {}
+      }, 150);
+    }
+
+    function closeManualCopyModal() {
+      manualCopyModal.classList.add('hidden');
+      manualCopyModal.classList.remove('flex');
+      document.body.style.overflow = '';
+    }
+
+    apiKeyBtn.addEventListener('click', openApiKeyModal);
+    apiKeyModalCloseBtn.addEventListener('click', closeApiKeyModal);
+    manualCopyCloseBtn.addEventListener('click', closeManualCopyModal);
+
+    // 바깥 영역을 눌러도 닫힌다
+    apiKeyModal.addEventListener('click', (e) => { if (e.target === apiKeyModal) closeApiKeyModal(); });
+    manualCopyModal.addEventListener('click', (e) => { if (e.target === manualCopyModal) closeManualCopyModal(); });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!manualCopyModal.classList.contains('hidden')) closeManualCopyModal();
+      if (!apiKeyModal.classList.contains('hidden')) closeApiKeyModal();
+    });
+
+    apiKeyToggleBtn.addEventListener('click', () => {
+      const showing = apiKeyInput.type === 'text';
+      apiKeyInput.type = showing ? 'password' : 'text';
+      apiKeyToggleBtn.textContent = showing ? '보기' : '가리기';
+    });
+
+    apiKeySaveBtn.addEventListener('click', () => {
+      // 붙여넣기 시 따라 들어온 공백/따옴표 제거
+      const key = apiKeyInput.value.trim().replace(/^["']|["']$/g, '').trim();
+      if (!key) {
+        showToast('API 키를 입력해 주세요.', 'error');
+        apiKeyInput.focus();
+        return;
+      }
+      if (key.length < 20) {
+        showToast('API 키가 너무 짧습니다. 전체 키를 다시 붙여넣어 주세요.', 'error');
+        apiKeyInput.focus();
+        return;
+      }
+      if (!/^AIza[0-9A-Za-z_\-]+$/.test(key)) {
+        showToast('일반적인 제미나이 키 형식(AIza...)이 아닙니다. 저장은 되지만 분석이 실패하면 키를 확인해 주세요.', 'error');
+      }
+      if (!saveApiKey(key)) {
+        showToast('이 브라우저에서 저장이 차단되었습니다. 시크릿 모드를 끄고 다시 시도해 주세요.', 'error');
+        return;
+      }
+      updateApiKeyUI();
+      closeApiKeyModal();
+      showToast('API 키가 저장되었습니다. 이제 사진 분석을 시작할 수 있어요.', 'success');
+    });
+
+    apiKeyDeleteBtn.addEventListener('click', () => {
+      removeApiKey();
+      apiKeyInput.value = '';
+      updateApiKeyUI();
+      showToast('저장된 API 키를 삭제했습니다.');
+    });
+
+    // 앱 시작 시 저장된 키 상태 반영
+    updateApiKeyUI();
+
+    // 지수 백오프를 적용한 Gemini API 호출 함수
+    async function callGeminiWithRetry(payload, maxRetries = 3) {
+      // 키는 항상 이 기기의 저장소에서 읽는다 (코드에 하드코딩 금지)
+      const apiKey = loadApiKey();
+      if (!apiKey) {
+        const noKeyErr = new Error('제미나이 API 키가 없습니다. 상단의 "키 설정"에서 먼저 저장해 주세요.');
+        noKeyErr.code = 'NO_API_KEY';
+        throw noKeyErr;
+      }
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            if ((response.status === 429 || response.status >= 500) && attempt < maxRetries) {
+              const delay = Math.pow(2, attempt) * 1000;
+              await new Promise(res => setTimeout(res, delay));
+              continue;
+            }
+            const errData = await response.json().catch(() => ({}));
+            const detail = errData?.error?.message || `API 요청 오류 (${response.status})`;
+            const isAuthError = response.status === 400 || response.status === 401 || response.status === 403;
+            const apiErr = new Error(isAuthError
+              ? `API 키가 올바르지 않거나 권한이 없습니다. 키 설정에서 다시 확인해 주세요. (${detail})`
+              : detail);
+            apiErr.code = isAuthError ? 'AUTH_ERROR' : 'API_ERROR';
+            throw apiErr;
+          }
+
+          return await response.json();
+        } catch (error) {
+          // 키 문제는 재시도해도 결과가 같으므로 바로 중단
+          if (error.code === 'NO_API_KEY' || error.code === 'AUTH_ERROR') throw error;
+          if (attempt === maxRetries) throw error;
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(res => setTimeout(res, delay));
+        }
+      }
+    }
+
+    // 10년 차 패션 MD 시스템 프롬프트 생성
+    function buildSystemPrompt(tone) {
+      const toneGuideline = tone === 'resale'
+        ? `[작성 톤앤매너: 당근마켓/중고거래 판매자 톤]
+- 이웃에게 친근하고 정중하게 설명하는 말투("~해요", "~입니다")를 사용해.
+- 구매자가 중고거래 시 가장 민감하게 보는 '실제 컨디션(오염/보풀 여부)', '착용감', '실측 사이즈 참고 안내'를 솔직하고 깔끔하게 정리해.
+- full_description은 당근마켓이나 번개장터 게시글에 그대로 붙여넣기 좋도록 가독성 좋은 줄바꿈과 기호(•, ✔️)를 활용해 작성해.`
+        : `[작성 톤앤매너: 패션 쇼핑몰/스마트스토어 전문 MD 톤]
+- 고객의 구매 욕구를 자극하는 감각적이고 세련된 에디토리얼 카피라이팅 톤을 사용해.
+- 원단의 고급스러운 무드, 핏의 장점, 다양한 코디 활용도를 매력적으로 어필해.
+- full_description은 자사몰이나 스마트스토어 상품 요약/상세 영역에 바로 쓸 수 있도록 구조화해 작성해.`;
+
+      return `너는 10년 경력의 패션 MD이자 의류 상세페이지 전문 카피라이터야.
+사용자가 업로드한 의류 상품 사진(1장 이상)을 정밀하게 분석하여, 구매 전환율을 높이는 상품 설명 데이터를 생성해야 해.
+
+[분석 규칙]
+1. 소재 및 질감 (Material & Texture):
+   - 사진 속 원단의 직조 방식(니트, 트위드, 데님, 코튼, 린넨, 울, 캐시미어, 레더, 폴리 등), 두께감(얇음/보통/도톰함), 비침 여부, 신축성, 광택감을 시각적 단서로 유추해 설명해.
+   - 만약 케어라벨이나 행택 사진이 함께 업로드되었다면, 라벨에 적힌 실제 혼용률(%)과 세탁 방법을 최우선으로 정확히 기재해.
+2. 핏 및 실루엣 (Fit & Silhouette):
+   - 전체적인 핏(슬림핏, 스탠다드핏, 세미오버핏, 루즈핏, 크롭, 롱기장 등)과 어깨선(드롭숄더, 레글런, 정핏), 네크라인, 소매 및 밑단 디테일(시보리, 트임, 스트링 등)을 구체적으로 묘사해.
+3. 스타일링 팁 (Styling Tips):
+   - 해당 의류와 가장 잘 어울리는 하의/상의, 아우터, 신발 조합을 2~3가지 제안해.
+   - 추천 착용 계절(봄/여름/가을/겨울/간절기)과 활용 상황(데일리룩, 오피스룩, 하객룩, 데이트룩 등)을 포함해.
+4. 사이즈 및 체형 커버 안내 (Size & Body Type Guide):
+   - 라벨에 표기된 사이즈(S, M, L, FREE 또는 55, 66 등)가 보이면 이를 기준으로 추천 착용 범위를 안내해.
+   - 라벨이 없다면 의류의 여유분(품과 기장 비율)을 바탕으로 추천 사이즈 범위와 체형 보완 포인트를 작성해.
+5. 상태 판별 (Condition):
+   - 보풀, 오염, 구김, 늘어남, 택 유무 등 사진상 확인되는 컨디션과 사용자 메모를 종합해 객관적으로 요약해.
+
+${toneGuideline}
+- 사진에서 확인할 수 없는 정확한 실측 cm 수치는 사용자가 메모로 제공하지 않았다면 임의로 지어내지 마.
+- 반드시 지정된 JSON 스키마 형식으로만 응답해.`;
+    }
+
+    // 생성 버튼 클릭 이벤트
+    generateBtn.addEventListener('click', async () => {
+      if (state.images.length === 0) {
+        showToast('먼저 의류 사진을 1장 이상 업로드해 주세요!', 'error');
+        return;
+      }
+
+      if (state.isGenerating) return;
+
+      // API 키가 없으면 분석을 시작하지 않고 키 설정 모달을 연다
+      if (!loadApiKey()) {
+        showToast('제미나이 API 키를 먼저 저장해 주세요.', 'error');
+        openApiKeyModal();
+        return;
+      }
+
+      state.isGenerating = true;
+      generateBtn.disabled = true;
+
+      // UI 상태 전환
+      emptyState.classList.add('hidden');
+      resultDashboard.classList.add('hidden');
+      loadingState.classList.remove('hidden');
+
+      // 로딩 문구 순환 애니메이션
+      const loadingMessages = [
+        '원단 조직과 실루엣, 케어라벨 정보를 확인하고 있어요...',
+        '어울리는 하의와 아우터 코디 조합을 매칭하고 있어요...',
+        '선택하신 판매 채널에 딱 맞는 문구로 다듬고 있어요...'
+      ];
+      let msgIdx = 0;
+      loadingStepText.textContent = loadingMessages[0];
+      const msgInterval = setInterval(() => {
+        msgIdx = (msgIdx + 1) % loadingMessages.length;
+        loadingStepText.textContent = loadingMessages[msgIdx];
+      }, 2200);
+
+      try {
+        const memoText = extraMemo.value.trim();
+        const userPromptText = memoText
+          ? `첨부된 의류 사진 ${state.images.length}장과 다음 판매자 추가 메모를 함께 분석해서 JSON으로 출력해 줘.\n[판매자 추가 메모]: ${memoText}`
+          : `첨부된 의류 사진 ${state.images.length}장을 정밀 분석해서 JSON으로 출력해 줘.`;
+
+        // 멀티모달 parts 구성 (텍스트 + 업로드된 이미지들)
+        const parts = [{ text: userPromptText }];
+        state.images.forEach(img => {
+          parts.push({
+            inlineData: {
+              mimeType: img.mimeType,
+              data: img.base64
+            }
+          });
+        });
+
+        // Structured Output JSON Schema 정의
+        const responseSchema = {
+          type: "OBJECT",
+          properties: {
+            product_title: { type: "STRING" },
+            category: { type: "STRING" },
+            color: { type: "STRING" },
+            material_info: {
+              type: "OBJECT",
+              properties: {
+                fabric_summary: { type: "STRING" },
+                thickness: { type: "STRING" },
+                stretch: { type: "STRING" },
+                lining: { type: "STRING" },
+                care_tip: { type: "STRING" }
+              },
+              required: ["fabric_summary", "thickness", "stretch", "lining", "care_tip"]
+            },
+            fit_and_design: {
+              type: "OBJECT",
+              properties: {
+                fit_type: { type: "STRING" },
+                design_details: {
+                  type: "ARRAY",
+                  items: { type: "STRING" }
+                }
+              },
+              required: ["fit_type", "design_details"]
+            },
+            styling_tips: {
+              type: "ARRAY",
+              items: { type: "STRING" }
+            },
+            size_guide: {
+              type: "OBJECT",
+              properties: {
+                recommended_size: { type: "STRING" },
+                body_cover_point: { type: "STRING" }
+              },
+              required: ["recommended_size", "body_cover_point"]
+            },
+            condition_check: { type: "STRING" },
+            full_description: { type: "STRING" },
+            hashtags: {
+              type: "ARRAY",
+              items: { type: "STRING" }
+            }
+          },
+          required: [
+            "product_title",
+            "category",
+            "color",
+            "material_info",
+            "fit_and_design",
+            "styling_tips",
+            "size_guide",
+            "condition_check",
+            "full_description",
+            "hashtags"
+          ]
+        };
+
+        const payload = {
+          contents: [{ role: "user", parts }],
+          systemInstruction: {
+            parts: [{ text: buildSystemPrompt(state.tone) }]
+          },
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: responseSchema,
+            temperature: 0.4
+          }
+        };
+
+        const apiResult = await callGeminiWithRetry(payload);
+        const rawText = apiResult?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!rawText) {
+          throw new Error('AI 응답을 받아오지 못했습니다. 다시 시도해 주세요.');
+        }
+
+        const parsedData = JSON.parse(rawText);
+        state.lastResult = parsedData;
+        renderResultDashboard(parsedData);
+
+        // 모바일에서 결과 영역으로 부드럽게 스크롤
+        if (window.innerWidth < 1024) {
+          resultDashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        showToast('상품 설명이 완성되었습니다!', 'success');
+
+      } catch (err) {
+        console.error(err);
+        loadingState.classList.add('hidden');
+        if (state.lastResult) {
+          resultDashboard.classList.remove('hidden');
+        } else {
+          emptyState.classList.remove('hidden');
+        }
+        showToast(`분석 중 오류가 발생했습니다: ${err.message}`, 'error');
+        // 키 문제라면 바로 고칠 수 있게 키 설정 모달을 같이 열어 준다
+        if (err.code === 'NO_API_KEY' || err.code === 'AUTH_ERROR') {
+          openApiKeyModal();
+        }
+      } finally {
+        clearInterval(msgInterval);
+        state.isGenerating = false;
+        generateBtn.disabled = false;
+      }
+    });
+
+    // 결과 대시보드 바인딩 함수
+    function renderResultDashboard(data) {
+      loadingState.classList.add('hidden');
+      emptyState.classList.add('hidden');
+      resultDashboard.classList.remove('hidden');
+
+      document.getElementById('resCategory').textContent = data.category || '의류';
+      document.getElementById('resColor').textContent = data.color || '기본 컬러';
+      document.getElementById('resToneBadge').textContent = state.tone === 'resale' ? '🥕 중고·개인거래 톤' : '🛍️ 도소매 매장·쇼핑몰 톤';
+      document.getElementById('resTitle').textContent = data.product_title || '';
+      document.getElementById('resFullDescription').value = data.full_description || '';
+
+      // 가격 입력 상태 동기화
+      updatePricingCalculation();
+
+      // 소재 정보
+      const mat = data.material_info || {};
+      document.getElementById('resFabricSummary').textContent = mat.fabric_summary || '';
+      document.getElementById('resThickness').textContent = mat.thickness || '-';
+      document.getElementById('resStretch').textContent = mat.stretch || '-';
+      document.getElementById('resLining').textContent = mat.lining || '-';
+      document.getElementById('resCareTip').textContent = mat.care_tip || '';
+
+      // 핏 & 디테일
+      const fit = data.fit_and_design || {};
+      document.getElementById('resFitType').textContent = fit.fit_type || '스탠다드 핏';
+      const detailsList = document.getElementById('resDesignDetails');
+      detailsList.innerHTML = (fit.design_details || []).map(item => `
+        <li class="flex items-start gap-2">
+          <span class="text-emerald-500 font-bold mt-0.5">•</span>
+          <span>${item}</span>
+        </li>
+      `).join('');
+
+      // 사이즈 안내
+      const size = data.size_guide || {};
+      document.getElementById('resRecommendedSize').textContent = size.recommended_size || '';
+      document.getElementById('resBodyCover').textContent = size.body_cover_point || '';
+
+      // 스타일링 팁
+      const stylingList = document.getElementById('resStylingTips');
+      stylingList.innerHTML = (data.styling_tips || []).map((tip, idx) => `
+        <li class="flex items-start gap-2 bg-rose-50/40 p-2.5 rounded-xl border border-rose-100/60">
+          <span class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold shrink-0 mt-0.5">LOOK ${idx + 1}</span>
+          <span class="leading-relaxed">${tip}</span>
+        </li>
+      `).join('');
+
+      // 컨디션 요약
+      document.getElementById('resCondition').textContent = data.condition_check || '';
+
+      // 해시태그 렌더링 (따옴표가 들어간 태그도 깨지지 않도록 DOM으로 생성)
+      const tagsContainer = document.getElementById('resHashtags');
+      tagsContainer.innerHTML = '';
+      const tags = (data.hashtags || []).map(t => {
+        const tag = String(t).trim();
+        return tag.startsWith('#') ? tag : `#${tag}`;
+      });
+      tags.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 text-xs font-medium transition-colors';
+        btn.textContent = tag;
+        btn.addEventListener('click', () => copyToClipboard(tag, `${tag} 복사됨`));
+        tagsContainer.appendChild(btn);
+      });
+    }
+
+    // 결과 영역 복사 버튼 이벤트
+    document.getElementById('copyTitleBtn').addEventListener('click', () => {
+      const title = document.getElementById('resTitle').textContent;
+      copyToClipboard(title, '상품명이 복사되었습니다!');
+    });
+
+    document.getElementById('copyFullDescBtn').addEventListener('click', () => {
+      let desc = document.getElementById('resFullDescription').value.trim();
+      if (!desc) return;
+
+      // 체크박스 선택에 따라 도매가/소매가 정보를 상단에 자동 결합하여 복사
+      if (state.pricing.cny) {
+        const priceLines = [];
+        if (includeWholesaleChk.checked) {
+          priceLines.push(`▪ 도매가: ${formatKRW(state.pricing.wholesalePrice)}`);
+        }
+        if (includeRetailChk.checked) {
+          priceLines.push(`▪ 소매가: ${formatKRW(state.pricing.retailPrice)}`);
+        }
+        if (priceLines.length > 0) {
+          desc = `${priceLines.join('\n')}\n\n${desc}`;
+        }
+      }
+
+      copyToClipboard(desc, '완성형 본문 전체가 복사되었습니다!');
+    });
+
+    document.getElementById('copyTagsBtn').addEventListener('click', () => {
+      if (!state.lastResult?.hashtags) return;
+      const allTags = state.lastResult.hashtags
+        .map(t => (t.startsWith('#') ? t : `#${t}`))
+        .join(' ');
+      copyToClipboard(allTags, '해시태그 전체가 복사되었습니다!');
+    });
+
+    // ─────────────────────────────────────────────
+    // 노션용 한 번에 복사
+    // ─────────────────────────────────────────────
+
+    // (클립보드 복사 함수는 위의 copyWithClipboardFallback 하나로 통일)
+
+    // 생성된 상품 데이터를 노션 붙여넣기용 마크다운 한 덩어리로 조합
+    function buildNotionMarkdown() {
+      const data = state.lastResult || {};
+      const mat = data.material_info || {};
+      const fit = data.fit_and_design || {};
+      const size = data.size_guide || {};
+      const toneLabel = state.tone === 'resale' ? '중고·개인거래 톤' : '도소매 매장·쇼핑몰 톤';
+      const lines = [];
+
+      const pushBullet = (label, value) => {
+        const v = (value === 0 || value) ? String(value).trim() : '';
+        if (v) lines.push(`- **${label}**: ${v}`);
+      };
+      const pushText = (text) => {
+        const v = (text === 0 || text) ? String(text).trim() : '';
+        if (v) lines.push(v);
+      };
+      const blank = () => {
+        if (lines.length && lines[lines.length - 1] !== '') lines.push('');
+      };
+
+      // 제목 및 기본 정보
+      lines.push(`# ${(data.product_title || '상품명').trim()}`);
+      lines.push('');
+      pushBullet('카테고리', data.category);
+      pushBullet('컬러', data.color);
+      pushBullet('판매 채널 톤', toneLabel);
+
+      // 도·소매가 (중국 원가를 입력한 경우에만 포함)
+      if (state.pricing.cny && state.pricing.krwCost > 0) {
+        pushBullet('중국 원가', `¥${state.pricing.cny.toLocaleString('ko-KR')}`);
+        pushBullet('한국 원가', formatKRW(state.pricing.krwCost));
+        pushBullet('도매가', formatKRW(state.pricing.wholesalePrice));
+        pushBullet('소매가', formatKRW(state.pricing.retailPrice));
+        pushBullet('가격 기준', '위안 × 240 / 도매가 원가+10,000 · 소매가 원가+20,000 (100원 단위 반올림)');
+      }
+      blank();
+
+      // 소재 및 원단
+      if (mat.fabric_summary || mat.thickness || mat.stretch || mat.lining || mat.care_tip) {
+        lines.push('## 소재 및 원단');
+        if (mat.fabric_summary && String(mat.fabric_summary).trim()) {
+          pushText(mat.fabric_summary);
+          lines.push('');
+        }
+        pushBullet('두께감', mat.thickness);
+        pushBullet('신축성', mat.stretch);
+        pushBullet('안감', mat.lining);
+        pushBullet('세탁·관리', mat.care_tip);
+        blank();
+      }
+
+      // 핏 & 디자인 디테일
+      const details = Array.isArray(fit.design_details) ? fit.design_details.filter(Boolean) : [];
+      if (fit.fit_type || details.length) {
+        lines.push('## 핏 & 디자인');
+        pushBullet('핏', fit.fit_type);
+        if (details.length) {
+          lines.push('- **디테일**');
+          details.forEach(item => lines.push(`  - ${String(item).trim()}`));
+        }
+        blank();
+      }
+
+      // 사이즈 & 체형 안내
+      if (size.recommended_size || size.body_cover_point) {
+        lines.push('## 사이즈 & 체형 안내');
+        pushBullet('추천 사이즈', size.recommended_size);
+        pushBullet('체형 커버 포인트', size.body_cover_point);
+        blank();
+      }
+
+      // 스타일링 코디 팁
+      const styling = Array.isArray(data.styling_tips) ? data.styling_tips.filter(Boolean) : [];
+      if (styling.length) {
+        lines.push('## 스타일링 팁');
+        styling.forEach(tip => lines.push(`- ${String(tip).trim()}`));
+        blank();
+      }
+
+      // 상품 컨디션
+      if (data.condition_check) {
+        lines.push('## 상품 컨디션');
+        pushText(data.condition_check);
+        blank();
+      }
+
+      // 상세 설명
+      if (data.full_description) {
+        lines.push('## 상세 설명');
+        pushText(data.full_description);
+        blank();
+      }
+
+      // 해시태그
+      const tags = Array.isArray(data.hashtags) ? data.hashtags.filter(Boolean) : [];
+      if (tags.length) {
+        lines.push('## 해시태그');
+        lines.push(tags.map(t => {
+          const tag = String(t).trim();
+          return tag.startsWith('#') ? tag : `#${tag}`;
+        }).join(' '));
+      }
+
+      return lines.join('\n').trim() + '\n';
+    }
+
+    // '노션용 한 번에 복사' 버튼 동작
+    let copyNotionResetTimer = null;
+
+    copyNotionBtn.addEventListener('click', async () => {
+      if (!state.lastResult) {
+        showToast('먼저 AI 상품 설명을 생성해 주세요.', 'error');
+        return;
+      }
+
+      const markdown = buildNotionMarkdown();
+      if (!markdown.trim()) {
+        showToast('복사할 상품 데이터가 없습니다.', 'error');
+        return;
+      }
+
+      const copied = await copyWithClipboardFallback(markdown, '노션에 붙여넣을 상품 데이터가 복사되었습니다!');
+      if (!copied) return;
+
+      // 버튼 자체에도 '복사됨!' 피드백 표시
+      copyNotionBtnText.textContent = '복사됨!';
+      copyNotionBtn.classList.add('bg-emerald-50', 'ring-2', 'ring-emerald-300');
+      clearTimeout(copyNotionResetTimer);
+      copyNotionResetTimer = setTimeout(() => {
+        copyNotionBtnText.textContent = '노션용 한 번에 복사';
+        copyNotionBtn.classList.remove('bg-emerald-50', 'ring-2', 'ring-emerald-300');
+      }, 1800);
+    });
+  </script>
+</body>
+</html>
