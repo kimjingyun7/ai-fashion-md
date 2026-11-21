@@ -1287,7 +1287,7 @@
         throw noKeyErr;
       }
       // 키는 URL 쿼리가 아니라 HTTP 헤더(x-goog-api-key)로 전달한다 (Google 최신 권장 방식)
-      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent';
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
