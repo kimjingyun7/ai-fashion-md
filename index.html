@@ -661,7 +661,7 @@
 
       <label for="apiKeyInput" class="block text-[11px] font-semibold text-slate-600 mt-4 mb-1">API 키</label>
       <div class="relative">
-        <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AIza..." class="w-full pl-3 pr-14 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all" />
+        <input id="apiKeyInput" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="AQ.Ab8... 또는 AIza..." class="w-full pl-3 pr-14 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all" />
         <button type="button" id="apiKeyToggleBtn" class="absolute inset-y-0 right-0 px-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800">보기</button>
       </div>
 
@@ -1254,8 +1254,9 @@
         apiKeyInput.focus();
         return;
       }
-      if (!/^AIza[0-9A-Za-z_\-]+$/.test(key)) {
-        showToast('일반적인 제미나이 키 형식(AIza...)이 아닙니다. 저장은 되지만 분석이 실패하면 키를 확인해 주세요.', 'error');
+      const isValidKeyFormat = /^AIza[0-9A-Za-z_\-]+$/.test(key) || /^AQ\.[0-9A-Za-z_\-\.]+$/.test(key);
+      if (!isValidKeyFormat) {
+        showToast('일반적인 제미나이 키 형식(AQ... 또는 AIza...)이 아닙니다. 저장은 되지만 분석이 실패하면 키를 확인해 주세요.', 'error');
       }
       if (!saveApiKey(key)) {
         showToast('이 브라우저에서 저장이 차단되었습니다. 시크릿 모드를 끄고 다시 시도해 주세요.', 'error');
@@ -1285,13 +1286,17 @@
         noKeyErr.code = 'NO_API_KEY';
         throw noKeyErr;
       }
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+      // 키는 URL 쿼리가 아니라 HTTP 헤더(x-goog-api-key)로 전달한다 (Google 최신 권장 방식)
+      const apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
           const response = await fetch(apiUrl, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
             body: JSON.stringify(payload)
           });
 
