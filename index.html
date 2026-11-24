@@ -157,6 +157,28 @@
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
     }
+
+    /* ── 판매글 보관함 모달 ───────────────────────────────── */
+    .history-panel {
+      height: auto;
+      max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem);
+    }
+    @media (min-width: 640px) {
+      .history-panel {
+        height: min(640px, calc(100dvh - 3rem));
+      }
+    }
+    #historyList {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+    }
+    /* 보관함 목록 카드: 상품명이 길어도 한 줄로 정리 */
+    .history-item {
+      overflow: hidden;
+    }
+    #historySearchInput::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+    }
   </style>
 </head>
 <body class="min-h-screen flex flex-col antialiased selection:bg-indigo-100 selection:text-indigo-900">
@@ -174,6 +196,12 @@
         </div>
       </div>
       <div class="flex items-center gap-1.5 shrink-0">
+        <!-- 판매글 보관함 -->
+        <button id="historyBtn" type="button" aria-haspopup="dialog" title="판매글 보관함" class="flex items-center gap-1.5 px-2 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-colors">
+          <i data-lucide="archive" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>보관함</span>
+          <span id="historyCountBadge" class="min-w-[17px] h-[17px] px-1 rounded-full bg-slate-900 text-white text-[10px] font-bold flex items-center justify-center tabular-nums">0</span>
+        </button>
         <!-- 제미나이 API 키 설정 -->
         <button id="apiKeyBtn" type="button" aria-haspopup="dialog" title="제미나이 API 키 설정" class="flex items-center gap-1.5 px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-colors">
           <span id="apiKeyDot" class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
@@ -700,6 +728,64 @@
       <p class="text-xs text-slate-500 leading-relaxed mt-1.5">아이폰이 자동 복사를 막았습니다. 아래 글자를 길게 눌러 <b>전체 선택 → 복사</b> 해 주세요.</p>
       <textarea id="manualCopyText" readonly rows="8" class="w-full mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-800 leading-relaxed resize-none"></textarea>
       <button type="button" id="manualCopyCloseBtn" class="w-full mt-3 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold">닫기</button>
+    </div>
+  </div>
+
+  <!-- 판매글 보관함 모달 (자동 저장된 결과 다시보기) -->
+  <div id="historyModal" class="hidden fixed inset-0 z-50 items-end sm:items-center justify-center bg-slate-900/50 modal-backdrop p-0 sm:p-4">
+    <div class="history-panel w-full sm:max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+
+      <!-- 헤더 + 상품명 검색 -->
+      <div class="px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
+        <div class="w-10 h-1 rounded-full bg-slate-200 mx-auto mb-3 sm:hidden"></div>
+        <div class="flex items-start gap-3">
+          <div class="w-9 h-9 shrink-0 rounded-xl bg-slate-900 text-amber-300 flex items-center justify-center">
+            <i data-lucide="archive" class="w-4 h-4"></i>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h3 id="historyModalTitle" class="text-base font-bold text-slate-900">판매글 보관함</h3>
+            <p id="historyModalSubtitle" class="text-[11px] text-slate-500 mt-0.5">저장된 판매글이 없습니다.</p>
+          </div>
+          <button type="button" id="historyModalCloseBtn" aria-label="보관함 닫기" class="icon-tap -mt-1 -mr-1 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+        <div class="relative mt-3">
+          <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          <input id="historySearchInput" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="상품명으로 검색" aria-label="보관함 상품명 검색" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-slate-50/70 text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 transition-all" />
+        </div>
+      </div>
+
+      <!-- 최신순 목록 -->
+      <div id="historyList" class="flex-1 overflow-y-auto px-3 py-3 space-y-2"></div>
+
+      <!-- 빈 상태 -->
+      <div id="historyEmpty" class="hidden flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+        <div class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+          <i data-lucide="archive" class="w-6 h-6"></i>
+        </div>
+        <p class="text-xs font-bold text-slate-700">아직 저장된 판매글이 없습니다</p>
+        <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">사진을 올려 분석을 마치면 결과가 자동으로 보관함에 쌓입니다.</p>
+      </div>
+
+      <!-- 검색 결과 없음 -->
+      <div id="historyNoResult" class="hidden flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+        <p class="text-xs font-bold text-slate-700">검색 결과가 없습니다</p>
+        <p class="text-[11px] text-slate-500 mt-1">다른 상품명으로 검색해 보세요.</p>
+      </div>
+
+      <!-- 백업 내보내기 / 가져오기 -->
+      <div class="px-4 py-3 border-t border-slate-100 bg-slate-50/60 shrink-0 flex items-center gap-2 safe-bottom">
+        <button type="button" id="historyExportBtn" class="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-slate-100 active:scale-[0.99] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>JSON 내보내기</span>
+        </button>
+        <button type="button" id="historyImportBtn" class="flex-1 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-slate-100 active:scale-[0.99] transition-all">
+          <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+          <span>JSON 가져오기</span>
+        </button>
+        <input id="historyImportInput" type="file" accept="application/json,.json" class="file-input-hidden" tabindex="-1" aria-hidden="true" />
+      </div>
     </div>
   </div>
 
@@ -1612,6 +1698,9 @@ ${toneGuideline}
         state.lastResult = parsedData;
         renderResultDashboard(parsedData);
 
+        // 보관함에 자동 저장 (저장 실패가 결과 화면을 막지 않도록 내부에서 예외 처리)
+        saveHistoryEntry(parsedData);
+
         // 모바일에서 결과 영역으로 부드럽게 스크롤
         if (window.innerWidth < 1024) {
           resultDashboard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2504,6 +2593,632 @@ ${toneGuideline}
         btn.classList.remove('bg-emerald-500/20', 'border-emerald-300');
       }, 1800);
     });
+
+    // ─────────────────────────────────────────────────────────────
+    // 판매글 보관함: 분석이 끝난 결과를 자동 저장하고 다시 열어 본다
+    //   저장소: IndexedDB(moapick_history_db / items) → 안 되면 localStorage
+    //   API 키 저장소(ai_fashion_md_gemini_api_key)와는 완전히 별개
+    // ─────────────────────────────────────────────────────────────
+    const HISTORY_DB_NAME = 'moapick_history_db';
+    const HISTORY_DB_VERSION = 1;
+    const HISTORY_STORE_NAME = 'items';
+    const HISTORY_FALLBACK_KEY = 'moapick_history_fallback_v1';
+    const HISTORY_MAX_ITEMS = 200;          // 기기 저장소 보호를 위한 최대 보관 수
+    const HISTORY_THUMB_MAX_WIDTH = 240;    // 썰네일 최대 너비(px)
+    const HISTORY_THUMB_QUALITY = 0.65;     // JPEG 품질
+
+    const historyBtn = document.getElementById('historyBtn');
+    const historyCountBadge = document.getElementById('historyCountBadge');
+    const historyModal = document.getElementById('historyModal');
+    const historyModalCloseBtn = document.getElementById('historyModalCloseBtn');
+    const historyModalSubtitle = document.getElementById('historyModalSubtitle');
+    const historySearchInput = document.getElementById('historySearchInput');
+    const historyList = document.getElementById('historyList');
+    const historyEmpty = document.getElementById('historyEmpty');
+    const historyNoResult = document.getElementById('historyNoResult');
+    const historyExportBtn = document.getElementById('historyExportBtn');
+    const historyImportBtn = document.getElementById('historyImportBtn');
+    const historyImportInput = document.getElementById('historyImportInput');
+
+    let historyItems = [];        // 최신순 메모리 캐시
+    let historyQuery = '';        // 상품명 검색어
+    let historyModalOpen = false;
+    let historyDbPromise = null;
+
+    function historyPad2(n) {
+      return String(n).padStart(2, '0');
+    }
+
+    // IndexedDB 사용 가능 여부 (사파리 시크릿 모드·구형 웹뷰 대응)
+    function historyIdbAvailable() {
+      try {
+        return typeof indexedDB !== 'undefined' && !!indexedDB;
+      } catch (err) {
+        return false;
+      }
+    }
+
+    function openHistoryDb() {
+      if (!historyIdbAvailable()) {
+        return Promise.reject(new Error('IndexedDB를 사용할 수 없습니다.'));
+      }
+      if (historyDbPromise) return historyDbPromise;
+
+      historyDbPromise = new Promise((resolve, reject) => {
+        let req;
+        try {
+          req = indexedDB.open(HISTORY_DB_NAME, HISTORY_DB_VERSION);
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(HISTORY_STORE_NAME)) {
+            const store = db.createObjectStore(HISTORY_STORE_NAME, { keyPath: 'id' });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          db.onversionchange = () => { try { db.close(); } catch (err) {} };
+          resolve(db);
+        };
+        req.onerror = () => reject(req.error || new Error('보관함 DB를 열지 못했습니다.'));
+        req.onblocked = () => reject(new Error('보관함 DB가 다른 창에서 사용 중입니다.'));
+      }).catch(err => {
+        historyDbPromise = null;   // 다음 호출에서 다시 시도할 수 있게
+        throw err;
+      });
+
+      return historyDbPromise;
+    }
+
+    // 트랜잭션 한 건을 Promise로 감싸는 헬퍼
+    function historyDbRequest(mode, run) {
+      return openHistoryDb().then(db => new Promise((resolve, reject) => {
+        let tx;
+        let req;
+        let result;
+        try {
+          tx = db.transaction(HISTORY_STORE_NAME, mode);
+          req = run(tx.objectStore(HISTORY_STORE_NAME));
+        } catch (err) {
+          reject(err);
+          return;
+        }
+        if (req) {
+          req.onsuccess = () => { result = req.result; };
+          req.onerror = () => reject(req.error || new Error('보관함 처리 오류'));
+        }
+        tx.oncomplete = () => resolve(result);
+        tx.onerror = () => reject(tx.error || new Error('보관함 처리 오류'));
+        tx.onabort = () => reject(tx.error || new Error('보관함 처리 취소'));
+      }));
+    }
+
+    // ── localStorage 폴백 ──
+    function historyFallbackRead() {
+      try {
+        const raw = localStorage.getItem(HISTORY_FALLBACK_KEY);
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.items)) return parsed.items;
+        return [];
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function historyFallbackWrite(items) {
+      try {
+        localStorage.setItem(HISTORY_FALLBACK_KEY, JSON.stringify(items));
+        return true;
+      } catch (err) {
+        // 용량 초과 시 썰네일을 떼고 한 번 더 시도
+        try {
+          const slim = items.map(it => Object.assign({}, it, { thumbnail: null }));
+          localStorage.setItem(HISTORY_FALLBACK_KEY, JSON.stringify(slim));
+          return true;
+        } catch (err2) {
+          return false;
+        }
+      }
+    }
+
+    function sortHistoryItems(items) {
+      return items.slice().sort((a, b) => String(b && b.createdAt || '').localeCompare(String(a && a.createdAt || '')));
+    }
+
+    function trimHistoryOverflow() {
+      // 동기 캐시 기준으로는 자르지 않고 저장 후 목록을 다시 읽어 초과분을 지운다
+      return historyListItems().then(items => {
+        if (items.length <= HISTORY_MAX_ITEMS) return;
+        const extra = items.slice(HISTORY_MAX_ITEMS);
+        return extra.reduce((p, it) => p.then(() => historyRemove(it.id)), Promise.resolve());
+      }).catch(() => {});
+    }
+
+    async function historyListItems() {
+      try {
+        const items = await historyDbRequest('readonly', store => store.getAll());
+        return sortHistoryItems(Array.isArray(items) ? items : []);
+      } catch (err) {
+        return sortHistoryItems(historyFallbackRead());
+      }
+    }
+
+    async function historyGet(id) {
+      try {
+        const record = await historyDbRequest('readonly', store => store.get(id));
+        if (record) return record;
+      } catch (err) {
+        // 폴백 저장본일 수 있으니 아래에서 계속 확인
+      }
+      return historyFallbackRead().find(it => it && it.id === id) || null;
+    }
+
+    async function historyInsert(item) {
+      try {
+        await historyDbRequest('readwrite', store => store.put(item));
+        return 'indexeddb';
+      } catch (err) {
+        const rest = historyFallbackRead().filter(it => !it || it.id !== item.id);
+        const ok = historyFallbackWrite(sortHistoryItems([item].concat(rest)).slice(0, HISTORY_MAX_ITEMS));
+        if (!ok) throw err;
+        return 'localstorage';
+      }
+    }
+
+    async function historyRemove(id) {
+      let removed = false;
+      try {
+        await historyDbRequest('readwrite', store => store.delete(id));
+        removed = true;
+      } catch (err) {
+        // IndexedDB가 막힌 환경: 폴백 저장소에서만 지운다
+      }
+      const before = historyFallbackRead();
+      const after = before.filter(it => !it || it.id !== id);
+      if (after.length !== before.length) {
+        historyFallbackWrite(after);
+        removed = true;
+      }
+      return removed;
+    }
+
+    // ── 자동 저장 ──
+    // 업로드한 첫 번째 사진을 최대 240px · JPEG 0.65 썰네일로 축소
+    function buildHistoryThumbnail(sourceUrl) {
+      return new Promise(resolve => {
+        if (!sourceUrl) { resolve(null); return; }
+        try {
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const naturalWidth = img.width || img.naturalWidth || HISTORY_THUMB_MAX_WIDTH;
+              const naturalHeight = img.height || img.naturalHeight || HISTORY_THUMB_MAX_WIDTH;
+              const scale = Math.min(1, HISTORY_THUMB_MAX_WIDTH / naturalWidth);
+              const width = Math.max(1, Math.round(naturalWidth * scale));
+              const height = Math.max(1, Math.round(naturalHeight * scale));
+              const canvas = document.createElement('canvas');
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) { resolve(null); return; }
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0, width, height);
+              resolve(canvas.toDataURL('image/jpeg', HISTORY_THUMB_QUALITY));
+            } catch (err) {
+              resolve(null);
+            }
+          };
+          img.onerror = () => resolve(null);
+          img.src = sourceUrl;
+        } catch (err) {
+          resolve(null);
+        }
+      });
+    }
+
+    function buildHistoryTitle(data) {
+      const title = data && data.product_title ? String(data.product_title).trim() : '';
+      return title || '제목 없는 상품';
+    }
+
+    // 도매가/소매가를 한 줄로 요약 (원가를 입력하지 않았으면 카테고리·컴러만)
+    function buildHistorySummary(data) {
+      const parts = [];
+      const pricing = state.pricing || {};
+      if (pricing.cny) {
+        parts.push(`도매 ${formatKRW(pricing.wholesalePrice)}`);
+        parts.push(`소매 ${formatKRW(pricing.retailPrice)}`);
+      } else {
+        parts.push('가격 미입력');
+      }
+      if (data && data.category) parts.push(String(data.category));
+      if (data && data.color) parts.push(String(data.color));
+      return parts.join(' · ');
+    }
+
+    function buildHistoryEntry(data, thumbnail, sourceImages) {
+      const now = new Date();
+      const images = Array.isArray(sourceImages) ? sourceImages : [];
+      return {
+        id: `h_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: now.toISOString(),
+        title: buildHistoryTitle(data),
+        summary: buildHistorySummary(data),
+        thumbnail: thumbnail || null,
+        data: data,
+        // 다시 열었을 때 화면을 그대로 재현하기 위한 보조 정보
+        tone: state.tone,
+        pricing: Object.assign({}, state.pricing),
+        imageCount: images.length
+      };
+    }
+
+    // 분석 성공 직후 호출. 저장이 실패해도 결과 화면은 그대로 둔다.
+    async function saveHistoryEntry(data) {
+      try {
+        if (!data || typeof data !== 'object') return null;
+        const firstImage = (Array.isArray(state.images) && state.images[0]) ? state.images[0] : null;
+        const sourceUrl = firstImage
+          ? (firstImage.previewUrl || (firstImage.base64 ? `data:${firstImage.mimeType || 'image/jpeg'};base64,${firstImage.base64}` : null))
+          : null;
+        const thumbnail = await buildHistoryThumbnail(sourceUrl);
+        const entry = buildHistoryEntry(data, thumbnail, state.images);
+        await historyInsert(entry);
+        await trimHistoryOverflow();
+        await refreshHistoryBadge();
+        if (historyModalOpen) renderHistoryList();
+        return entry;
+      } catch (err) {
+        // 보관함 저장 실패는 결과 화면에 영향을 주지 않는다
+        try { console.warn('보관함 저장 실패:', err); } catch (e) {}
+        return null;
+      }
+    }
+
+    async function refreshHistoryBadge() {
+      try {
+        historyItems = await historyListItems();
+      } catch (err) {
+        historyItems = historyItems || [];
+      }
+      const count = historyItems.length;
+      historyCountBadge.textContent = String(count);
+      historyCountBadge.classList.toggle('bg-slate-900', count > 0);
+      historyCountBadge.classList.toggle('bg-slate-300', count === 0);
+      historyBtn.title = count ? `판매글 보관함 (${count}건)` : '판매글 보관함';
+      historyBtn.setAttribute('aria-label', count ? `판매글 보관함 ${count}건 열기` : '판매글 보관함 열기');
+      return historyItems;
+    }
+
+    // ── 목록 UI ──
+    function formatHistoryDate(iso) {
+      const d = new Date(iso);
+      if (!iso || isNaN(d.getTime())) return '';
+      return `${d.getFullYear()}.${historyPad2(d.getMonth() + 1)}.${historyPad2(d.getDate())} ${historyPad2(d.getHours())}:${historyPad2(d.getMinutes())}`;
+    }
+
+    function buildHistoryCard(item) {
+      const card = document.createElement('div');
+      card.className = 'history-item flex items-center gap-2.5 p-2.5 rounded-xl border border-slate-200 bg-white hover:border-slate-400 hover:bg-slate-50 active:scale-[0.995] transition-all cursor-pointer';
+      card.setAttribute('role', 'button');
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('aria-label', `${item.title || '상품'} 결과 다시보기`);
+      card.dataset.id = item.id;
+
+      const thumbWrap = document.createElement('div');
+      thumbWrap.className = 'w-12 h-12 shrink-0 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center';
+      if (item.thumbnail) {
+        const img = document.createElement('img');
+        img.className = 'w-full h-full object-cover';
+        img.src = item.thumbnail;
+        img.alt = item.title || '상품 썰네일';
+        img.loading = 'lazy';
+        thumbWrap.appendChild(img);
+      } else {
+        thumbWrap.innerHTML = '<i data-lucide="image" class="w-4 h-4 text-slate-400"></i>';
+      }
+
+      const body = document.createElement('div');
+      body.className = 'min-w-0 flex-1 text-left';
+      const title = document.createElement('p');
+      title.className = 'text-[13px] font-bold text-slate-900 truncate';
+      title.textContent = item.title || '제목 없는 상품';
+      const meta = document.createElement('p');
+      meta.className = 'text-[11px] text-slate-400 mt-0.5';
+      meta.textContent = formatHistoryDate(item.createdAt);
+      const summary = document.createElement('p');
+      summary.className = 'text-[11px] font-semibold text-slate-600 truncate mt-0.5';
+      summary.textContent = item.summary || '';
+      body.appendChild(title);
+      body.appendChild(meta);
+      body.appendChild(summary);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'icon-tap shrink-0 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors';
+      delBtn.setAttribute('aria-label', `${item.title || '상품'} 보관함에서 삭제`);
+      delBtn.dataset.deleteId = item.id;
+      delBtn.innerHTML = '<i data-lucide="trash-2" class="w-4 h-4"></i>';
+
+      card.appendChild(thumbWrap);
+      card.appendChild(body);
+      card.appendChild(delBtn);
+
+      card.addEventListener('click', (e) => {
+        if (e.target && typeof e.target.closest === 'function' && e.target.closest('[data-delete-id]')) return;
+        restoreHistoryItem(item.id);
+      });
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          restoreHistoryItem(item.id);
+        }
+      });
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteHistoryItem(item.id);
+      });
+      return card;
+    }
+
+    function renderHistoryList() {
+      const q = String(historyQuery || '').trim().toLowerCase();
+      const filtered = q
+        ? historyItems.filter(it => String((it && it.title) || '').toLowerCase().includes(q))
+        : historyItems;
+
+      historyList.innerHTML = '';
+      filtered.forEach(item => historyList.appendChild(buildHistoryCard(item)));
+
+      const hasAny = historyItems.length > 0;
+      const showEmpty = !hasAny;
+      const showNoResult = hasAny && filtered.length === 0;
+      historyEmpty.classList.toggle('hidden', !showEmpty);
+      historyEmpty.classList.toggle('flex', showEmpty);
+      historyNoResult.classList.toggle('hidden', !showNoResult);
+      historyNoResult.classList.toggle('flex', showNoResult);
+      historyList.classList.toggle('hidden', filtered.length === 0);
+
+      historyModalSubtitle.textContent = hasAny
+        ? (q ? `${filtered.length}건 찾음 / 전체 ${historyItems.length}건` : `전체 ${historyItems.length}건 · 최신순`)
+        : '저장된 판매글이 없습니다.';
+
+      historyExportBtn.disabled = !hasAny;
+      historyExportBtn.classList.toggle('opacity-40', !hasAny);
+
+      if (window.lucide && typeof lucide.createIcons === 'function') {
+        try { lucide.createIcons(); } catch (err) {}
+      }
+    }
+
+    // ── 모달 열기/닫기 ──
+    async function openHistoryModal() {
+      historyQuery = '';
+      historySearchInput.value = '';
+      historyModal.classList.remove('hidden');
+      historyModal.classList.add('flex');
+      historyModalOpen = true;
+      document.body.style.overflow = 'hidden';
+      historyList.classList.remove('hidden');
+      renderHistoryList();
+      await refreshHistoryBadge();
+      renderHistoryList();
+    }
+
+    function closeHistoryModal() {
+      historyModal.classList.add('hidden');
+      historyModal.classList.remove('flex');
+      historyModalOpen = false;
+      document.body.style.overflow = '';
+    }
+
+    // 보관한 결과를 결과 화면 그대로 복원 (노션 복사 · 피그마 SVG 도 그대로 동작)
+    async function restoreHistoryItem(id) {
+      try {
+        const item = await historyGet(id);
+        if (!item || !item.data || typeof item.data !== 'object') {
+          showToast('보관된 결과를 불러오지 못했습니다.', 'error');
+          return;
+        }
+        state.lastResult = item.data;
+        if (item.tone === 'mall' || item.tone === 'resale') {
+          state.tone = item.tone;
+          syncToneButtons();
+        }
+        if (item.pricing && typeof item.pricing === 'object') {
+          cnyInput.value = item.pricing.cny ? String(item.pricing.cny) : '';
+        } else {
+          cnyInput.value = '';
+        }
+        updatePricingCalculation();
+        renderResultDashboard(item.data);
+        closeHistoryModal();
+        setTimeout(() => {
+          try { resultDashboard.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (err) {}
+        }, 120);
+        showToast('보관함에서 결과를 불러왔습니다.', 'success');
+      } catch (err) {
+        showToast(`보관함 불러오기 오류: ${err.message}`, 'error');
+      }
+    }
+
+    function syncToneButtons() {
+      toneBtns.forEach(btn => {
+        const active = btn.dataset.tone === state.tone;
+        btn.classList.toggle('active', active);
+        btn.classList.toggle('bg-white', active);
+        btn.classList.toggle('text-slate-900', active);
+        btn.classList.toggle('shadow-xs', active);
+        btn.classList.toggle('border', active);
+        btn.classList.toggle('border-slate-200/60', active);
+        btn.classList.toggle('text-slate-600', !active);
+      });
+    }
+
+    async function deleteHistoryItem(id) {
+      const target = historyItems.find(it => it && it.id === id);
+      const label = target ? target.title : '이 항목';
+      let confirmed = true;
+      try {
+        confirmed = window.confirm(`「${label}」을(를) 보관함에서 지울까요?\n지운 기록은 되돌릴 수 없습니다.`);
+      } catch (err) {
+        confirmed = true;
+      }
+      if (!confirmed) return;
+      const removed = await historyRemove(id);
+      await refreshHistoryBadge();
+      renderHistoryList();
+      if (removed) showToast('보관함에서 지웠습니다.', 'success');
+      else showToast('지우지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    }
+
+    // ── JSON 백업 내보내기 / 가져오기 ──
+    function historyExportFileName() {
+      const d = new Date();
+      return `moapick-history-${d.getFullYear()}${historyPad2(d.getMonth() + 1)}${historyPad2(d.getDate())}-${historyPad2(d.getHours())}${historyPad2(d.getMinutes())}.json`;
+    }
+
+    async function exportHistoryJson() {
+      try {
+        const items = await refreshHistoryBadge();
+        if (!items.length) {
+          showToast('내보낼 보관 기록이 없습니다.', 'error');
+          return;
+        }
+        const payload = {
+          app: '모아픽',
+          kind: 'moapick-history',
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          count: items.length,
+          items
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const fileName = historyExportFileName();
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) link.parentNode.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 1500);
+        showToast(`${items.length}건을 ${fileName}로 내보냈습니다.`, 'success');
+      } catch (err) {
+        showToast(`내보내기 실패: ${err.message}`, 'error');
+      }
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        try {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+          reader.readAsText(file);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function normalizeHistoryImport(raw) {
+      const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.items) ? raw.items : null);
+      if (!list) return null;
+      const clean = [];
+      list.forEach(it => {
+        if (!it || typeof it !== 'object') return;
+        if (!it.data || typeof it.data !== 'object') return;
+        const id = (typeof it.id === 'string' && it.id) ? it.id : `h_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const createdOk = typeof it.createdAt === 'string' && !isNaN(new Date(it.createdAt).getTime());
+        clean.push({
+          id,
+          createdAt: createdOk ? it.createdAt : new Date().toISOString(),
+          title: (typeof it.title === 'string' && it.title.trim()) ? it.title.trim() : buildHistoryTitle(it.data),
+          summary: typeof it.summary === 'string' ? it.summary : '',
+          thumbnail: (typeof it.thumbnail === 'string' && it.thumbnail.indexOf('data:image') === 0) ? it.thumbnail : null,
+          data: it.data,
+          tone: (it.tone === 'resale') ? 'resale' : (it.tone === 'mall' ? 'mall' : undefined),
+          pricing: (it.pricing && typeof it.pricing === 'object') ? it.pricing : undefined,
+          imageCount: Number.isFinite(it.imageCount) ? it.imageCount : 0
+        });
+      });
+      return clean;
+    }
+
+    async function importHistoryFile(file) {
+      try {
+        const text = await readFileAsText(file);
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch (err) {
+          showToast('JSON 파일을 읽지 못했습니다. 백업 파일인지 확인해 주세요.', 'error');
+          return;
+        }
+        const incoming = normalizeHistoryImport(parsed);
+        if (!incoming) {
+          showToast('모아픽 보관함 백업 형식이 아닙니다.', 'error');
+          return;
+        }
+        const existing = await historyListItems();
+        const knownIds = new Set(existing.map(it => it && it.id));
+        let added = 0;
+        for (const item of incoming) {
+          if (knownIds.has(item.id)) continue;
+          await historyInsert(item);
+          knownIds.add(item.id);
+          added++;
+        }
+        await trimHistoryOverflow();
+        await refreshHistoryBadge();
+        renderHistoryList();
+        if (added > 0) showToast(`${added}건을 보관함에 가져왔습니다.`, 'success');
+        else showToast('새로 가져올 기록이 없습니다.', 'info');
+      } catch (err) {
+        showToast(`가져오기 실패: ${err.message}`, 'error');
+      }
+    }
+
+    // ── 보관함 이벤트 바인딩 ──
+    historyBtn.addEventListener('click', openHistoryModal);
+    historyModalCloseBtn.addEventListener('click', closeHistoryModal);
+    historyModal.addEventListener('click', (e) => {
+      if (e.target === historyModal) closeHistoryModal();
+    });
+    historySearchInput.addEventListener('input', (e) => {
+      historyQuery = e.target.value || '';
+      renderHistoryList();
+    });
+    historySearchInput.addEventListener('search', (e) => {
+      historyQuery = e.target.value || '';
+      renderHistoryList();
+    });
+    historyExportBtn.addEventListener('click', exportHistoryJson);
+    historyImportBtn.addEventListener('click', () => {
+      try { historyImportInput.click(); } catch (err) {}
+    });
+    historyImportInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) await importHistoryFile(file);
+      try { e.target.value = ''; } catch (err) {}
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && historyModalOpen) closeHistoryModal();
+    });
+
+    // 첫 화면에서 저장 개수 배지 반영
+    refreshHistoryBadge();
   </script>
 </body>
 </html>
