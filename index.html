@@ -1380,8 +1380,8 @@
     updateApiKeyUI();
 
     // ── 제미나이 호출: 혼잡(503 high demand 등) 대응 재시도 + 모델 자동 폴백 ──
-    // 1순위 gemini-3.8-flash 유지. gemini-2.5-flash는 신규 키 미지원이라 목록에서 제외.
-    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+    // 1순위 gemini-3.8-flash. 신규 키에서 동작하지 않는 구모델(2.x, 3-flash-preview)은 목록에서 제외.
+    const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
     const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
     const RETRY_DELAYS_MS = [1500, 3000]; // 일시적 혼잡 시 최대 2회 재시도 (1.5초 → 3초)
 
@@ -1422,9 +1422,11 @@
 
       let lastBusyError = null;   // 혼잡으로 끝난 마지막 오류
       let lastModelError = null;  // 모델 미지원으로 끝난 마지막 오류
+      const modelAttempts = [];   // 모델별 마지막 결과 요약 (예: "gemini-3.8-flash: 503")
 
       for (let modelIndex = 0; modelIndex < GEMINI_MODELS.length; modelIndex++) {
         const model = GEMINI_MODELS[modelIndex];
+        let modelStatus = null; // 이 모델에서 마지막으로 받은 HTTP 상태 (0 = 네트워크 오류)
         // 키는 URL 쿼리가 아니라 HTTP 헤더(x-goog-api-key)로 전달한다 (Google 최신 권장 방식)
         const apiUrl = `${GEMINI_API_BASE}/${model}:generateContent`;
 
@@ -1446,6 +1448,7 @@
           } catch (networkError) {
             // 네트워크 순단도 일시적 오류로 보고 같은 모델에서 짧게 재시도
             lastBusyError = { status: 0, detail: networkError.message || '네트워크 오류' };
+            modelStatus = 0;
             if (attempt < maxRetries) {
               const waitSec = RETRY_DELAYS_MS[attempt] / 1000;
               onStatus(`인터넷 연결이 잠시 불안정해요. ${waitSec}초 후 자동으로 다시 시도합니다... (${attempt + 1}/${maxRetries})`);
@@ -1475,12 +1478,14 @@
           // 2) 모델 미지원/접근 불가: 재시도 없이 바로 다음 모델로
           if (isModelUnavailableApiError(status, detail)) {
             lastModelError = { status, detail };
+            modelStatus = status;
             break;
           }
 
           // 3) 일시적 혼잡: 1.5초 → 3초 대기 후 같은 모델 재시도, 그래도 안 되면 다음 모델로
           if (isTransientApiError(status, detail)) {
             lastBusyError = { status, detail };
+            modelStatus = status;
             if (attempt < maxRetries) {
               const waitSec = RETRY_DELAYS_MS[attempt] / 1000;
               onStatus(`제미나이 서버가 잠시 혼잡합니다. ${waitSec}초 후 자동으로 다시 시도합니다... (${attempt + 1}/${maxRetries})`);
@@ -1496,22 +1501,30 @@
           apiErr.status = status;
           throw apiErr;
         }
+
+        // 이 모델에서는 성공하지 못했다 → 시도 요약에 짧게 남긴다
+        modelAttempts.push(`${model}: ${modelStatus === null ? '실패' : (modelStatus === 0 ? '네트워크 오류' : modelStatus)}`);
       }
 
-      // 모든 모델에서 실패한 경우
+      // 모든 모델에서 실패한 경우: 어느 모델까지 넘어갔는지 한 줄 요약을 함께 남긴다
+      const attemptSummary = modelAttempts.join(', ');
+      console.warn('[제미나이 폴백] 모든 모델 실패:', attemptSummary);
+
       if (!lastBusyError && lastModelError) {
-        const unavailableErr = new Error(`지금 사용할 수 있는 제미나이 모델을 찾지 못했습니다. 잠시 후 다시 시도해 주세요. (${lastModelError.status}: ${lastModelError.detail})`);
+        const unavailableErr = new Error(`지금 사용할 수 있는 제미나이 모델을 찾지 못했습니다. 잠시 후 다시 시도해 주세요. (${lastModelError.status}: ${lastModelError.detail}) [시도한 모델: ${attemptSummary}]`);
         unavailableErr.code = 'API_ERROR';
         unavailableErr.status = lastModelError.status;
+        unavailableErr.modelAttempts = modelAttempts;
         throw unavailableErr;
       }
 
       const busyMessage = lastBusyError && lastBusyError.status
-        ? `제미나이 서버가 혼잡해 분석에 실패했습니다. 잠시 후 다시 시도해 주세요. (${lastBusyError.status}: ${lastBusyError.detail})`
-        : '제미나이 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해 주세요.';
+        ? `제미나이 서버가 혼잡해 분석에 실패했습니다. 잠시 후 다시 시도해 주세요. (${lastBusyError.status}: ${lastBusyError.detail}) [시도한 모델: ${attemptSummary}]`
+        : `제미나이 서버에 연결하지 못했습니다. 인터넷 연결을 확인하고 잠시 후 다시 시도해 주세요. [시도한 모델: ${attemptSummary}]`;
       const busyErr = new Error(busyMessage);
       busyErr.code = 'API_BUSY';
       busyErr.status = lastBusyError ? lastBusyError.status : 0;
+      busyErr.modelAttempts = modelAttempts;
       throw busyErr;
     }
 
