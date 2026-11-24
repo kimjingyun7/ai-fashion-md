@@ -431,14 +431,28 @@
                 <i data-lucide="clipboard-list" class="w-5 h-5 text-amber-300"></i>
               </div>
               <div class="min-w-0">
-                <h3 class="text-sm font-bold text-white leading-tight">노션에 그대로 붙여넣기</h3>
-                <p class="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed">상품명·카테고리·컬러·소재·핏·사이즈·가격·상세설명·해시태그를 마크다운 한 덩어리로 복사합니다.</p>
+                <h3 class="text-sm font-bold text-white leading-tight">노션 · 피그마로 바로 보내기</h3>
+                <p class="text-[11px] sm:text-xs text-slate-300 mt-1 leading-relaxed">노션은 마크다운 한 덩어리로, 피그마는 780px 상세페이지 SVG 한 장으로 복사합니다.</p>
+                <p class="text-[10.5px] text-slate-400 mt-0.5">피그마 SVG에는 원가·판매가 등 내부 가격 정보가 들어가지 않습니다.</p>
               </div>
             </div>
-            <button type="button" id="copyNotionBtn" class="w-full sm:w-auto sm:min-w-[184px] shrink-0 px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 active:scale-[0.99] text-slate-900 text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
-              <i data-lucide="clipboard-check" class="w-4 h-4 text-indigo-600"></i>
-              <span id="copyNotionBtnText">노션용 한 번에 복사</span>
-            </button>
+            <div class="w-full sm:w-auto shrink-0 flex flex-col gap-1.5">
+              <div class="grid grid-cols-2 sm:flex sm:flex-row gap-2">
+                <button type="button" id="copyNotionBtn" class="col-span-2 sm:col-span-1 sm:min-w-[168px] px-4 py-2.5 rounded-xl bg-white hover:bg-amber-50 active:scale-[0.99] text-slate-900 text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
+                  <i data-lucide="clipboard-check" class="w-4 h-4 text-indigo-600"></i>
+                  <span id="copyNotionBtnText">노션용 한 번에 복사</span>
+                </button>
+                <button type="button" id="copyFigmaSvgBtn" class="px-3 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 active:scale-[0.99] text-white text-[13px] sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all">
+                  <i data-lucide="frame" class="w-4 h-4"></i>
+                  <span id="copyFigmaSvgBtnText">피그마용 SVG 복사</span>
+                </button>
+                <button type="button" id="downloadFigmaSvgBtn" class="px-3 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 active:scale-[0.99] border border-white/30 text-white text-[13px] sm:text-sm font-bold flex items-center justify-center gap-2 transition-all">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                  <span id="downloadFigmaSvgBtnText">SVG 다운로드</span>
+                </button>
+              </div>
+              <p class="text-[10.5px] leading-relaxed text-slate-400 sm:text-right">PC 피그마에서 <b class="text-slate-300">Ctrl+V</b>(Mac은 Cmd+V) · 다운로드 파일은 캔버스로 드래그</p>
+            </div>
           </div>
 
           <!-- 결과 상단: 수입 원가 및 도·소매가 요약 카드 (위안화 입력 시 자동 표시) -->
@@ -1868,6 +1882,626 @@ ${toneGuideline}
       copyNotionResetTimer = setTimeout(() => {
         copyNotionBtnText.textContent = '노션용 한 번에 복사';
         copyNotionBtn.classList.remove('bg-emerald-50', 'ring-2', 'ring-emerald-300');
+      }, 1800);
+    });
+
+    // ─────────────────────────────────────────────
+    // 피그마용 상세페이지 SVG (780px)
+    //   · 결과를 780px 폭 SVG 한 장으로 만들어 피그마 캔버스에 그대로 붙여넣는다.
+    //   · 원가·도매가·소매가·가격 기준·판매 채널 같은 내부 정보는 절대 넣지 않는다.
+    // ─────────────────────────────────────────────
+
+    const FIGMA_W = 780;
+    const FIGMA_FONT = "Pretendard, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif";
+
+    // 텍스트 폭을 브라우저 실제 폰트로 재기 위한 캔버스 (한 번만 만든다)
+    let figmaCtx;
+    const figmaWidthCache = new Map();
+
+    function getFigmaCtx() {
+      if (figmaCtx !== undefined) return figmaCtx;
+      figmaCtx = null;
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas && typeof canvas.getContext === 'function' ? canvas.getContext('2d') : null;
+        if (ctx && typeof ctx.measureText === 'function') figmaCtx = ctx;
+      } catch (err) {
+        figmaCtx = null;
+      }
+      return figmaCtx;
+    }
+
+    // 캔버스를 못 쓰는 환경을 위한 근사 폭 계산기
+    function approxFigmaCharWidth(ch, fontSize, weight) {
+      const code = ch.codePointAt(0);
+      let ratio = 0.55;
+      if (code >= 0xAC00 && code <= 0xD7A3) ratio = 1.0;          // 한글 음절
+      else if (code >= 0x1100 && code <= 0x11FF) ratio = 0.96;      // 한글 자모
+      else if (code >= 0x3130 && code <= 0x318F) ratio = 0.96;      // 한글 호환 자모
+      else if (code >= 0x4E00 && code <= 0x9FFF) ratio = 1.0;       // 한자
+      else if (code >= 0xFF00 && code <= 0xFF60) ratio = 0.96;      // 전각
+      else if (ch === ' ') ratio = 0.28;
+      else if (/[iIljt.,;:'!|]/.test(ch)) ratio = 0.32;
+      else if (/[A-Z0-9]/.test(ch)) ratio = 0.64;
+      else if (/[mwMW@%]/.test(ch)) ratio = 0.85;
+      if (weight >= 700) ratio *= 1.03;
+      return ratio * fontSize;
+    }
+
+    function measureFigmaText(text, fontSize, weight) {
+      const s = String(text == null ? '' : text);
+      if (!s) return 0;
+      const key = `${weight}|${fontSize}|${s}`;
+      const cached = figmaWidthCache.get(key);
+      if (cached !== undefined) return cached;
+
+      let width = 0;
+      const ctx = getFigmaCtx();
+      if (ctx) {
+        ctx.font = `${weight} ${fontSize}px ${FIGMA_FONT}`;
+        try { width = ctx.measureText(s).width; } catch (err) { width = 0; }
+      }
+      if (!width || !isFinite(width)) {
+        width = 0;
+        for (const ch of s) width += approxFigmaCharWidth(ch, fontSize, weight);
+      }
+      if (figmaWidthCache.size < 5000) figmaWidthCache.set(key, width);
+      return width;
+    }
+
+    // 공백 기준 줄바꿈 + 한 단어가 줄보다 길면 글자 단위로 끊는다
+    function wrapFigmaText(text, fontSize, weight, maxWidth) {
+      const src = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+      if (!src) return [];
+      const limit = maxWidth * 0.985; // 폰트 메트릭 차이를 흡수하는 안전 여유
+      const fits = (s) => measureFigmaText(s, fontSize, weight) <= limit;
+      const lines = [];
+      let cur = '';
+      src.split(' ').forEach((word) => {
+        const trial = cur ? `${cur} ${word}` : word;
+        if (fits(trial)) { cur = trial; return; }
+        if (cur) { lines.push(cur); cur = ''; }
+        if (fits(word)) { cur = word; return; }
+        let buf = '';
+        for (const ch of word) {
+          if (!buf || fits(buf + ch)) buf += ch;
+          else { lines.push(buf); buf = ch; }
+        }
+        cur = buf;
+      });
+      if (cur) lines.push(cur);
+      return lines;
+    }
+
+    function truncateFigmaText(text, fontSize, weight, maxWidth) {
+      let s = String(text == null ? '' : text);
+      if (measureFigmaText(s, fontSize, weight) <= maxWidth) return s;
+      let cut = s.replace(/\u2026$/, '');
+      while (cut.length > 1 && measureFigmaText(`${cut}\u2026`, fontSize, weight) > maxWidth) {
+        cut = cut.slice(0, -1);
+      }
+      return `${cut}\u2026`;
+    }
+
+    // 컬러명 → 스와치 색 (기본 컬러명만 매핑, 모르면 뉴트럴)
+    function figmaColorSwatch(name) {
+      const rules = [
+        [/(차콜|charcoal|스모크|smoke)/i, '#4B4E53'],
+        [/(블랙|검정|black)/i, '#242424'],
+        [/(버건디|burgundy|와인|wine|레드|red|체리|cherry)/i, '#8E2F35'],
+        [/(네이비|navy|남색|인디고|indigo)/i, '#232E44'],
+        [/(더스티|dusty|스카이|sky|하늘|연청|라이트블루|light blue|데님|denim|블루|blue)/i, '#7D9DBC'],
+        [/(버터|butter|옐로우|yellow|레몬|lemon|머스타드|mustard)/i, '#EFD89A'],
+        [/(핑크|pink|로즈|rose|살구|apricot|코랄|coral|피치|peach)/i, '#E4B3B8'],
+        [/(퍼플|purple|라벤더|lavender|바이올렛|violet|자주)/i, '#8A7796'],
+        [/(그린|green|카키|khaki|올리브|olive|민트|mint|세이지|sage)/i, '#6E7F5C'],
+        [/(오렌지|orange|테라코타|terracotta)/i, '#C47A50'],
+        [/(딥브라운|초콜렛|초콜릿|chocolate)/i, '#3E2C22'],
+        [/(브라운|brown|모카|mocha|코코아|cocoa|초코|choco|밤색)/i, '#6A4A38'],
+        [/(라이트그레이|light grey|light gray|멜란지|melange|그레이|grey|gray)/i, '#C6C8CC'],
+        [/(실버|silver|골드|gold|메탈|metal)/i, '#C2C2C6'],
+        [/(베이지|beige|오트밀|oatmeal|샌드|sand|카멜|camel|누드|nude|크림브라운)/i, '#D9C7AC'],
+        [/(화이트|흰색|white|아이보리|ivory|크림|cream|에크루|ecru)/i, '#F2EFE6']
+      ];
+      const src = String(name || '');
+      for (const [re, hex] of rules) {
+        if (re.test(src)) return hex;
+      }
+      return '#D8D5CE';
+    }
+
+    // 상품 설명 본문을 [본문 / 불릿 / 빈 줄] 블록으로 나눈다
+    function parseFigmaBody(raw) {
+      const text = String(raw == null ? '' : raw).replace(/\r\n/g, '\n');
+      const out = [];
+      const bulletRe = /^[\s]*(?:[\u2022\u00b7\u25aa\u25e6\u2023\u2219\u25cf\u25cb\u25a0\u25a1\u25b8\u25b6\u25ba\-\u2013\u2014*>]|[\u2714\u2611\u2705])/;
+      text.split('\n').forEach((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) { out.push({ type: 'gap' }); return; }
+        const isBullet = bulletRe.test(trimmed);
+        const body = isBullet ? trimmed.replace(bulletRe, '').replace(/^[\s*]+/, '') : trimmed;
+        const cleanBody = stripFigmaEmoji(body).replace(/\*\*/g, '').replace(/[ \t]+/g, ' ').trim();
+        if (cleanBody) out.push({ type: isBullet ? 'bullet' : 'text', text: cleanBody });
+      });
+      return out;
+    }
+
+    function stripFigmaEmoji(s) {
+      return String(s == null ? '' : s)
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0E}\u{FE0F}\u{200D}\u{203C}\u{2049}\u{2139}]/gu, '')
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+    }
+
+    function figmaSvgFileName() {
+      const raw = stripFigmaEmoji((state.lastResult && state.lastResult.product_title) || '상품').trim();
+      const safe = raw.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+      return `${safe || '상품'}-detail-780.svg`;
+    }
+
+    function buildFigmaDetailSvg() {
+      const data = state.lastResult || {};
+      const mat = data.material_info || {};
+      const fit = data.fit_and_design || {};
+      const sizeGuide = data.size_guide || {};
+
+      const W = FIGMA_W;
+      const M = 46;
+      const INNER = W - M * 2;
+
+      const C = {
+        ink: '#1E1E1E',
+        inkSoft: '#262626',
+        white: '#FFFFFF',
+        off: '#F7F6F2',
+        lgray: '#F3F2EE',
+        phLight: '#DCDAD4',
+        phDark: '#333333',
+        txt: '#2B2B2B',
+        txtM: '#6E6E6E',
+        accent: '#5C7E9E',
+        accentDark: '#93ADC4',
+        line: '#DCDAD3'
+      };
+
+      const nodes = [];
+      const sections = [];
+      let y = 0;
+
+      const fmt = (n) => String(Math.round(n * 100) / 100);
+      const escText = (s) => String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escAttr = (s) => escText(s).replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+      const clean = (s) => stripFigmaEmoji(String(s == null ? '' : s).replace(/\*\*/g, ''))
+        .replace(/[ \t]+/g, ' ').trim();
+
+      const ASC = 0.8; // 폰트 크기 대비 베이스라인 위치
+
+      function txt(x, top, str, size, weight, color, ls, anchor) {
+        const base = top + size * ASC;
+        let s = `<text x="${fmt(x)}" y="${fmt(base)}" font-family="${escAttr(FIGMA_FONT)}" font-size="${size}" font-weight="${weight}" fill="${color}"`;
+        if (ls) s += ` letter-spacing="${ls}"`;
+        if (anchor && anchor !== 'start') s += ` text-anchor="${anchor}"`;
+        s += `>${escText(str)}</text>`;
+        nodes.push(s);
+      }
+
+      function rect(x, top, w, h, fill, rx, id, stroke, sw) {
+        let s = `<rect x="${fmt(x)}" y="${fmt(top)}" width="${fmt(w)}" height="${fmt(h)}"`;
+        if (rx) s += ` rx="${rx}" ry="${rx}"`;
+        s += ` fill="${fill}"`;
+        if (stroke) s += ` stroke="${stroke}" stroke-width="${sw || 1}"`;
+        if (id) s += ` id="${id}"`;
+        nodes.push(`${s}/>`);
+      }
+
+      function circle(cx, cy, r, fill, stroke, sw) {
+        let s = `<circle cx="${fmt(cx)}" cy="${fmt(cy)}" r="${fmt(r)}" fill="${fill}"`;
+        if (stroke) s += ` stroke="${stroke}" stroke-width="${sw || 1}"`;
+        nodes.push(`${s}/>`);
+      }
+
+      function line(x1, y1, x2, y2, color, sw, dash) {
+        let s = `<line x1="${fmt(x1)}" y1="${fmt(y1)}" x2="${fmt(x2)}" y2="${fmt(y2)}" stroke="${color}" stroke-width="${sw || 1}"`;
+        if (dash) s += ` stroke-dasharray="${dash}"`;
+        nodes.push(`${s}/>`);
+      }
+
+      function photo(x, top, w, h, label, sub, dark, id) {
+        rect(x, top, w, h, dark ? C.phDark : C.phLight, 10, id);
+        const cx = x + w / 2;
+        const blockH = sub ? 42 : 20;
+        const t1 = top + h / 2 - blockH / 2;
+        txt(cx, t1, label, 15, 500, dark ? '#A8A8A8' : '#7E7E7E', 0.2, 'middle');
+        if (sub) {
+          const subText = truncateFigmaText(sub, 11, 400, w - 28);
+          txt(cx, t1 + 22, subText, 11, 400, dark ? '#8A8A8A' : '#8C8C8C', 0.3, 'middle');
+        }
+      }
+
+      function sectionHeader(top, en, ko, dark) {
+        line(W / 2 - 16, top + 1, W / 2 + 16, top + 1, dark ? C.accentDark : C.accent, 1);
+        let yy = top + 22;
+        txt(W / 2, yy, en, 19.5, 600, dark ? C.white : C.ink, 5, 'middle');
+        yy += 28;
+        txt(W / 2, yy, ko, 12.5, 400, '#8F8F8F', 0.6, 'middle');
+        return yy + 26;
+      }
+
+      function para(x, top, str, size, weight, color, lh, maxW, anchor, ls) {
+        const lines = wrapFigmaText(str, size, weight, maxW);
+        lines.forEach((ln, i) => txt(x, top + i * lh, ln, size, weight, color, ls || 0, anchor || 'start'));
+        return { bottom: top + lines.length * lh, lines };
+      }
+
+      const beginSection = (fill) => { sections.push({ top: y, fill }); };
+
+      // ── 1. HERO (다크) ─────────────────────────────
+      beginSection(C.ink);
+      y = 46;
+
+      const categoryLabel = clean(data.category) || 'FASHION';
+      const badgeLabel = truncateFigmaText(categoryLabel, 11.5, 500, INNER - 60);
+      const badgeW = measureFigmaText(badgeLabel, 11.5, 500) + 44;
+      rect(W / 2 - badgeW / 2, y, badgeW, 26, 'none', 13, null, '#4C4C4C', 1);
+      txt(W / 2, y + 6.5, badgeLabel, 11.5, 500, '#CFCFCF', 1.6, 'middle');
+      y += 26 + 42;
+
+      const titleText = clean(data.product_title) || '상품명';
+      const titleSizes = [[40, 54], [34, 47], [30, 42]];
+      let titleSize = 40;
+      let titleLh = 54;
+      let titleLines = [];
+      for (const [size, lh] of titleSizes) {
+        const lines = wrapFigmaText(titleText, size, 700, 646);
+        titleSize = size;
+        titleLh = lh;
+        titleLines = lines;
+        if (lines.length <= 2) break;
+      }
+      if (titleLines.length > 3) {
+        titleLines = titleLines.slice(0, 3);
+        titleLines[2] = truncateFigmaText(`${titleLines[2]}\u2026`, titleSize, 700, 646);
+      }
+      titleLines.forEach((ln, i) => txt(W / 2, y + i * titleLh, ln, titleSize, 700, C.white, -0.5, 'middle'));
+      y += titleLines.length * titleLh + 20;
+
+      const metaBits = [clean(fit.fit_type), clean(mat.thickness), clean(mat.stretch)].filter(Boolean);
+      if (metaBits.length) {
+        const metaLines = wrapFigmaText(metaBits.join('  ·  '), 13, 500, 620);
+        metaLines.forEach((ln, i) => txt(W / 2, y + i * 22, ln, 13, 500, '#9E9E9E', 0.9, 'middle'));
+        y += metaLines.length * 22 + 18;
+      }
+
+      const heroCond = clean(data.condition_check);
+      if (heroCond) {
+        let condLines = wrapFigmaText(heroCond, 14, 400, 620);
+        if (condLines.length > 3) {
+          const kept = condLines.slice(0, 3).join(' ');
+          condLines = wrapFigmaText(kept, 14, 400, 620).slice(0, 3);
+          condLines[condLines.length - 1] = truncateFigmaText(`${condLines[condLines.length - 1]}\u2026`, 14, 400, 620);
+        }
+        condLines.forEach((ln, i) => txt(W / 2, y + i * 24, ln, 14, 400, '#A9A9A9', 0.2, 'middle'));
+        y += condLines.length * 24;
+      }
+      y += 40;
+
+      photo(M, y, INNER, 860, '사진 넣는 곳', '메인 풀샷 · 4:5 / 1080×1350', true, 'photo-hero');
+      y += 860 + 58;
+
+      // ── 2. COLOR ──────────────────────────────────
+      const colorNames = (() => {
+        const src = clean(data.color);
+        if (!src) return [];
+        const parts = src.split(/[,/·、|+]|\s{2,}/).map((s) => s.trim()).filter(Boolean)
+          .filter((s) => !/^\d+\s*(color|colour|컬러|가지|종)?$/i.test(s))
+          .map((s) => truncateFigmaText(s.replace(/\([^)]*\)/g, '').trim() || s, 13, 500, INNER - 90))
+          .filter(Boolean);
+        const seen = new Set();
+        return parts.filter((s) => {
+          const k = s.toLowerCase();
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        }).slice(0, 12);
+      })();
+
+      if (colorNames.length) {
+        beginSection(C.off);
+        y += 66;
+        y = sectionHeader(y, 'COLOR', colorNames.length > 1 ? `컬러 ${colorNames.length}가지` : '컬러 구성', false);
+        y += 18;
+
+        const chipH = 40;
+        const chipGapX = 9;
+        const chipGapY = 11;
+        const dotR = 11;
+        let cx = M;
+        let rowTop = y;
+        colorNames.forEach((nm) => {
+          const labelW = measureFigmaText(nm, 13, 500);
+          const chipW = 16 + dotR * 2 + 10 + labelW + 16;
+          if (cx > M && cx + chipW > W - M) { cx = M; rowTop += chipH + chipGapY; }
+          rect(cx, rowTop, chipW, chipH, C.white, chipH / 2, null, '#E6E2D9', 1);
+          circle(cx + 16 + dotR, rowTop + chipH / 2, dotR, figmaColorSwatch(nm), '#D6D2C8', 0.8);
+          txt(cx + 16 + dotR * 2 + 10, rowTop + 11.5, nm, 13, 500, C.txt, 0, 'start');
+          cx += chipW + chipGapX;
+        });
+        y = rowTop + chipH + 34;
+        photo(M, y, INNER, 459, '사진 넣는 곳', '컬러 착용 컷 · 3:2 / 1200×800', false, 'photo-colors');
+        y += 459 + 66;
+      }
+
+      // ── 3. FABRIC ─────────────────────────────────
+      const fabricSummary = clean(mat.fabric_summary);
+      const specList = [
+        ['두께감', clean(mat.thickness)],
+        ['신축성', clean(mat.stretch)],
+        ['안감', clean(mat.lining)],
+        ['세탁·관리', clean(mat.care_tip)]
+      ].filter((s) => s[1]);
+
+      if (fabricSummary || specList.length) {
+        beginSection(C.white);
+        y += 66;
+        y = sectionHeader(y, 'FABRIC', '원단과 소재', false);
+        y += 12;
+        if (fabricSummary) {
+          y = para(W / 2, y, fabricSummary, 15.5, 400, '#3D3D3D', 27, 600, 'middle', 0.1).bottom + 30;
+        }
+        if (specList.length) {
+          const cellW = (INNER - 14) / 2;
+          for (let i = 0; i < specList.length; i += 2) {
+            const rowCells = specList.slice(i, i + 2).map(([label, value]) => ({
+              label,
+              lines: wrapFigmaText(value, 14, 600, cellW - 44)
+            }));
+            const maxLines = Math.max(...rowCells.map((c) => c.lines.length));
+            const rowH = 34 + maxLines * 21 + 20;
+            rowCells.forEach((cell, j) => {
+              const x = M + j * (cellW + 14);
+              rect(x, y, cellW, rowH, C.off, 10);
+              txt(x + 22, y + 15, cell.label, 11, 500, '#8C8C8C', 1.4, 'start');
+              cell.lines.forEach((ln, k) => txt(x + 22, y + 40 + k * 21, ln, 14, 600, C.ink, 0, 'start'));
+            });
+            y += rowH + 14;
+          }
+          y += 16;
+        }
+        photo(M, y, INNER, 459, '사진 넣는 곳', '원단 클로즈업 · 3:2 / 1200×800', false, 'photo-fabric');
+        y += 459 + 66;
+      }
+
+      // ── 4. FIT & DETAIL ───────────────────────────
+      const fitType = clean(fit.fit_type);
+      const details = (Array.isArray(fit.design_details) ? fit.design_details : [])
+        .map(clean).filter(Boolean).slice(0, 6);
+
+      if (fitType || details.length) {
+        beginSection(C.off);
+        y += 66;
+        y = sectionHeader(y, 'FIT & DETAIL', '핏과 디테일 포인트', false);
+        y += 6;
+        if (fitType) {
+          const ftLines = wrapFigmaText(fitType, 26, 600, 660);
+          ftLines.forEach((ln, i) => txt(W / 2, y + i * 34, ln, 26, 600, C.ink, -0.3, 'middle'));
+          y += ftLines.length * 34 + 34;
+        }
+        details.forEach((item, i) => {
+          const lines = wrapFigmaText(item, 14.5, 500, INNER - 78);
+          if (i > 0) {
+            y += 10;
+            line(M, y, W - M, y, '#E4E0D7', 1);
+            y += 14;
+          }
+          txt(M + 22, y, String(i + 1).padStart(2, '0'), 11.5, 700, C.accent, 1.2, 'start');
+          lines.forEach((ln, k) => txt(M + 64, y - 3 + k * 22, ln, 14.5, 500, C.txt, 0.1, 'start'));
+          y += Math.max(26, lines.length * 22);
+        });
+
+        y += 38;
+        const detailW = (INNER - 20) / 2;
+        const detailH = detailW * 5 / 4;
+        photo(M, y, detailW, detailH, '사진 넣는 곳', '디테일 컷 1 · 4:5 / 900×1125', false, 'photo-detail-1');
+        photo(M + detailW + 20, y, detailW, detailH, '사진 넣는 곳', '디테일 컷 2 · 4:5 / 900×1125', false, 'photo-detail-2');
+        y += detailH + 66;
+      }
+
+      // ── 5. MD COMMENT & SIZE ───────────────────────
+      const mdBody = String(data.full_description == null ? '' : data.full_description).trim();
+      const recSize = clean(sizeGuide.recommended_size);
+      const bodyCover = clean(sizeGuide.body_cover_point);
+
+      if (mdBody || recSize || bodyCover) {
+        beginSection(C.white);
+        y += 66;
+        y = sectionHeader(y, 'MD COMMENT', '상품을 직접 확인한 MD의 코멘트', false);
+        y += 14;
+
+        if (mdBody) {
+          const bx = (W - 620) / 2;
+          parseFigmaBody(mdBody).forEach((block) => {
+            if (block.type === 'gap') { y += 12; return; }
+            if (block.type === 'bullet') {
+              circle(bx + 5, y + 9, 2.4, C.accent);
+              y = para(bx + 20, y, block.text, 15, 400, '#3D3D3D', 26, 600, 'start', 0.1).bottom + 5;
+              return;
+            }
+            y = para(bx, y, block.text, 15, 400, '#3D3D3D', 26, 620, 'start', 0.1).bottom + 5;
+          });
+          y += 16;
+        }
+
+        if (recSize || bodyCover) {
+          line(W / 2 - 22, y + 4, W / 2 + 22, y + 4, C.accent, 1);
+          y += 40;
+          txt(W / 2, y, 'SIZE GUIDE', 11.5, 600, C.accent, 3.2, 'middle');
+          y += 28;
+          if (recSize) {
+            const rsLines = wrapFigmaText(recSize, 22, 600, 640);
+            rsLines.forEach((ln, i) => txt(W / 2, y + i * 30, ln, 22, 600, C.ink, 0.2, 'middle'));
+            y += rsLines.length * 30 + 26;
+          }
+
+          const fitPhotoW = 300;
+          const fitPhotoH = 375;
+          photo(M, y, fitPhotoW, fitPhotoH, '사진 넣는 곳', '전신 착용샷 · 4:5 / 900×1125', false, 'photo-fit');
+          const tx = M + fitPhotoW + 30;
+          const txw = INNER - fitPhotoW - 30;
+          let ty = y + 4;
+          if (bodyCover) {
+            txt(tx, ty, 'BODY COVER POINT', 10.5, 600, C.accent, 2.4, 'start');
+            ty += 24;
+            ty = para(tx, ty, bodyCover, 13, 400, C.txtM, 22, txw, 'start', 0.1).bottom;
+          }
+          y = Math.max(y + fitPhotoH, ty) + 66;
+        } else {
+          y += 46;
+        }
+      }
+
+      // ── 6. STYLING & HASHTAG ──────────────────────
+      const tips = (Array.isArray(data.styling_tips) ? data.styling_tips : []).map(clean).filter(Boolean);
+      const tags = (Array.isArray(data.hashtags) ? data.hashtags : []).map((t) => {
+        const v = clean(t).replace(/^#+/, '');
+        return v ? `#${v}` : '';
+      }).filter(Boolean);
+
+      if (tips.length || tags.length) {
+        beginSection(C.off);
+        y += 66;
+        y = sectionHeader(y, 'STYLING TIP', '이렇게 입어보세요', false);
+        y += 10;
+        tips.forEach((tip, i) => {
+          const lines = wrapFigmaText(tip, 14.5, 400, INNER - 96);
+          txt(M + 18, y, `LOOK 0${i + 1}`, 10.5, 600, C.accent, 2.4, 'start');
+          lines.forEach((ln, k) => txt(M + 104, y - 1 + k * 23, ln, 14.5, 400, '#3D3D3D', 0.1, 'start'));
+          y += Math.max(26, lines.length * 23) + 18;
+        });
+        y += 14;
+        photo(M, y, INNER, 459, '사진 넣는 곳', '스타일링 컷 · 3:2 / 1200×800', false, 'photo-styling');
+        y += 459 + 44;
+        if (tags.length) {
+          const tagLines = wrapFigmaText(tags.join('  '), 12.8, 400, 660);
+          tagLines.forEach((ln, k) => txt(W / 2, y + k * 22, ln, 12.8, 400, '#9C9C9C', 0.4, 'middle'));
+          y += tagLines.length * 22;
+        }
+        y += 56;
+      }
+
+      // ── 7. FOOTER (다크) ──────────────────────────
+      beginSection(C.ink);
+      const footH = 92;
+      const footTitle = truncateFigmaText(titleText, 12.5, 500, 640);
+      txt(W / 2, y + (footH - 15) / 2, footTitle, 12.5, 500, '#8F8F8F', 0.6, 'middle');
+      y += footH;
+
+      // ── 조립 ──────────────────────────────────────
+      const H = Math.ceil(y);
+      const bg = sections.map((s, i) => {
+        const top = s.top;
+        const bottom = i < sections.length - 1 ? sections[i + 1].top : H;
+        return `<rect x="0" y="${fmt(top)}" width="${W}" height="${fmt(bottom - top)}" fill="${s.fill}"/>`;
+      }).join('');
+
+      return [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="${escAttr(FIGMA_FONT)}">`,
+        `<title>${escText(`${titleText} · 상세페이지 780px`)}</title>`,
+        `<desc>${escText('780px 상세페이지 템플릿 · 사진 자리 7개')}</desc>`,
+        `<g id="backgrounds">${bg}</g>`,
+        `<g id="content">${nodes.join('')}</g>`,
+        '</svg>'
+      ].join('\n');
+    }
+
+    // SVG를 만들고 기본 유효성까지 확인한다 (실패 시 null + 토스트)
+    function getFigmaSvgOrToast() {
+      if (!state.lastResult) {
+        showToast('먼저 AI 상품 설명을 생성해 주세요.', 'error');
+        return null;
+      }
+      let svg = '';
+      try {
+        svg = buildFigmaDetailSvg();
+      } catch (err) {
+        showToast(`SVG 생성 중 오류가 발생했습니다: ${err.message}`, 'error');
+        return null;
+      }
+      if (!svg || svg.indexOf('<svg') === -1 || svg.indexOf('</svg>') === -1) {
+        showToast('SVG를 만들 수 있는 상품 데이터가 없습니다.', 'error');
+        return null;
+      }
+      try {
+        if (typeof DOMParser !== 'undefined') {
+          const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
+          if (doc && doc.getElementsByTagName('parsererror').length) {
+            showToast('SVG 형식 오류가 있어 생성을 중단했습니다.', 'error');
+            return null;
+          }
+        }
+      } catch (err) {
+        // DOMParser가 없는 환경은 그대로 진행
+      }
+      return svg;
+    }
+
+    // '피그마용 SVG 복사' 버튼
+    let copyFigmaResetTimer = null;
+
+    document.getElementById('copyFigmaSvgBtn').addEventListener('click', async () => {
+      const svg = getFigmaSvgOrToast();
+      if (!svg) return;
+
+      const btn = document.getElementById('copyFigmaSvgBtn');
+      const btnText = document.getElementById('copyFigmaSvgBtnText');
+      const copied = await copyWithClipboardFallback(svg, '780px 상세페이지 SVG가 복사되었습니다. 피그마 캔버스에서 Ctrl+V!');
+      if (!copied) return;
+
+      btnText.textContent = '복사됨!';
+      btn.classList.add('bg-emerald-500', 'ring-2', 'ring-emerald-300');
+      clearTimeout(copyFigmaResetTimer);
+      copyFigmaResetTimer = setTimeout(() => {
+        btnText.textContent = '피그마용 SVG 복사';
+        btn.classList.remove('bg-emerald-500', 'ring-2', 'ring-emerald-300');
+      }, 1800);
+    });
+
+    // 'SVG 다운로드' 버튼
+    let downloadFigmaResetTimer = null;
+
+    document.getElementById('downloadFigmaSvgBtn').addEventListener('click', () => {
+      const svg = getFigmaSvgOrToast();
+      if (!svg) return;
+
+      const btn = document.getElementById('downloadFigmaSvgBtn');
+      const btnText = document.getElementById('downloadFigmaSvgBtnText');
+      const fileName = figmaSvgFileName();
+
+      try {
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) link.parentNode.removeChild(link);
+          URL.revokeObjectURL(url);
+        }, 1500);
+        showToast(`${fileName} 파일을 저장했습니다.`, 'success');
+      } catch (err) {
+        showToast(`파일 저장에 실패했습니다: ${err.message}`, 'error');
+        return;
+      }
+
+      btnText.textContent = '저장됨!';
+      btn.classList.add('bg-emerald-500/20', 'border-emerald-300');
+      clearTimeout(downloadFigmaResetTimer);
+      downloadFigmaResetTimer = setTimeout(() => {
+        btnText.textContent = 'SVG 다운로드';
+        btn.classList.remove('bg-emerald-500/20', 'border-emerald-300');
       }, 1800);
     });
   </script>
